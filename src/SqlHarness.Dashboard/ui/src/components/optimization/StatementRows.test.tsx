@@ -101,3 +101,11 @@ test("shows unequal execution counts and hidden work without IO", () => {
   rerender(<StatementRows rows={[{ ...statement, readsBefore: null, readsAfter: null, scansBefore: null, scansAfter: null }]} />)
   expect(screen.getByText("UDF time 15% of statement")).toBeInTheDocument()
 })
+
+
+test("empty flat availability dictionaries preserve paired unavailable reasons", () => {
+  const unavailable = { status: "unavailable" as const, reason: "ambiguous attribution", availableCases: 0, totalCases: 1 }
+  render(<StatementRows measured rows={[{ ...row, readsAfter: null, metricAvailabilityBefore: {}, metricAvailabilityAfter: {}, availability: { reads: { before: unavailable, after: unavailable } }, planLinkAfter: "/plan" }]} />)
+  expect(screen.getByText(/ambiguous attribution/)).toHaveTextContent("reads after: ambiguous attribution (0/1 cases)")
+  expect(screen.getByRole("link", { name: "Plan after" })).toHaveAttribute("href", "/plan")
+})

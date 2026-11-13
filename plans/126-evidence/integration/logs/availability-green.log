@@ -1,0 +1,18 @@
+
+ RUN  v5.0.3 C:/Users/rgone/MultiCliProfiles/codex/account-b/worktrees/8723/sqlharness/src/SqlHarness.Dashboard/ui
+
+ ✓ src/components/optimization/StatementRows.test.tsx > renders statement status, counters, and only the resolved plan destination 110ms
+ ✓ src/components/optimization/StatementRows.test.tsx > Objects retains its nested open state across close and reopen 210ms
+ ✓ src/components/optimization/StatementRows.test.tsx > renders both hidden-work flag forms 14ms
+ ✓ src/components/optimization/StatementRows.test.tsx > sorts comparison rows by absolute read change 26ms
+ ✓ src/components/optimization/StatementRows.test.tsx > shows selected-run metrics and LOB values in statement details 80ms
+ ✓ src/components/optimization/StatementRows.test.tsx > measured statement shows unavailable reason while retaining plan 18ms
+ ✓ src/components/optimization/StatementRows.test.tsx > missing IO preserves statement text and plan without numeric grid 7ms
+ ✓ src/components/optimization/StatementRows.test.tsx > shows unequal execution counts and hidden work without IO 13ms
+ ✓ src/components/optimization/StatementRows.test.tsx > empty flat availability dictionaries preserve paired unavailable reasons 9ms
+
+ Test Files  1 passed (1)
+      Tests  9 passed (9)
+   Start at  10:17:49
+   Duration  2.43s (environment 42%, tests 22%, setup 16%, import 13%, transform 7%)
+

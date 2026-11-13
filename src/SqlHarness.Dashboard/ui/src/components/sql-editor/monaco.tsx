@@ -71,7 +71,7 @@ function defineSqlTheme(dark: boolean) {
       { token: "keyword", foreground: editorTokenColor("--sql-keyword", dark ? "C4B5FD" : "6D28D9"), fontStyle: "bold" },
       { token: "string", foreground: editorTokenColor("--sql-string", dark ? "86EFAC" : "15803D") },
       { token: "number", foreground: editorTokenColor("--sql-number", dark ? "FDBA74" : "C2410C") },
-      { token: "comment", foreground: editorTokenColor("--muted-foreground", dark ? "A1A1AA" : "71717A"), fontStyle: "italic" },
+      { token: "comment", foreground: editorTokenColor("--sql-comment", dark ? "C0C0C8" : "50505A"), fontStyle: "italic" },
     ],
     colors: {
       "editor.background": editorTokenColor("--background", dark ? "252526" : "FFFFFF"),
@@ -111,19 +111,29 @@ const editorOptions: MonacoEditorApi.IStandaloneEditorConstructionOptions = {
   automaticLayout: true,
   padding: { top: 8, bottom: 8 },
   fontFamily: "Geist Mono Variable, monospace",
-  fontSize: 12,
-  lineHeight: 19,
+  fontSize: 14,
+  lineHeight: 22,
+  ariaLabel: "Read-only SQL",
+  // The experimental EditContext path omits native input names in current Chromium.
+  // These viewers are read-only: use Monaco's labelled textarea and normal Tab navigation.
+  editContext: false,
+  accessibilitySupport: "on",
+  tabFocusMode: true,
 }
 
 function useSqlTheme(): string {
   const [theme, setTheme] = useState(() => document.documentElement.classList.contains("dark") ? "sqlharness-dark" : "sqlharness-light")
   useEffect(() => {
     const root = document.documentElement
+    let currentDark: boolean | undefined
     const update = () => {
       const dark = root.classList.contains("dark")
+      if (dark === currentDark) return
+      currentDark = dark
       defineSqlTheme(dark)
       setTheme(dark ? "sqlharness-dark" : "sqlharness-light")
     }
+    update()
     const observer = new MutationObserver(update)
     observer.observe(root, { attributes: true, attributeFilter: ["class"] })
     return () => observer.disconnect()
@@ -135,14 +145,74 @@ function languageFor(dialect: SqlViewerProps["dialect"]): string {
   return dialect === "postgres" ? postgresLanguage : tsqlLanguage
 }
 
+function sqlHeight(...documents: string[]): number {
+  // Count only enough lines to reach the initial height cap; never split a large batch.
+  let lines = 1
+  for (const sql of documents) {
+    let count = 1
+    for (let index = 0; index < sql.length && count < 22; index++) {
+      if (sql[index] === "\n") count++
+    }
+    lines = Math.max(lines, count)
+  }
+  return Math.max(88, Math.min(480, lines * 22 + 18))
+}
+
+const sqlViewerHeightKey = "sqlharness.sqlViewer.height"
+
+function readManualHeight(): number | null {
+  try {
+    const stored = sessionStorage.getItem(sqlViewerHeightKey)
+    if (stored === null || stored.trim() === "") return null
+    const height = Number(stored)
+    return Number.isFinite(height) && height >= 88 && height <= 1200 ? height : null
+  } catch {
+    return null
+  }
+}
+
+function rememberManualHeight(height: number) {
+  try {
+    sessionStorage.setItem(sqlViewerHeightKey, String(height))
+  } catch {
+    // Storage can be unavailable; the mounted frame still retains the manual choice.
+  }
+}
+
 function ResizableSqlFrame({ height, children }: { height: number; children: ReactNode }) {
-  return <div data-slot="sql-editor-frame" className="min-h-32 min-w-0 max-h-[1200px] resize-y overflow-hidden rounded border" style={{ height }}>{children}</div>
+  const frame = useRef<HTMLDivElement>(null)
+  const [manualHeight, setManualHeight] = useState<number | null>(readManualHeight)
+  const displayedHeight = manualHeight ?? height
+  useEffect(() => {
+    const element = frame.current
+    if (!element) return
+    const observer = new ResizeObserver(() => {
+      const measured = element.getBoundingClientRect().height
+      if (measured > 0 && Math.abs(measured - displayedHeight) > 2) {
+        const resized = Math.max(88, Math.min(1200, measured))
+        setManualHeight(resized)
+        rememberManualHeight(resized)
+      }
+    })
+    observer.observe(element)
+    return () => observer.disconnect()
+  }, [displayedHeight])
+  return <div ref={frame} data-slot="sql-editor-frame" role="group" tabIndex={0}
+    aria-label="SQL viewer. Use Alt and Up or Down arrow to resize."
+    className="min-h-[88px] min-w-0 max-h-[1200px] resize-y overflow-hidden rounded border focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring"
+    style={{ height: displayedHeight }} onKeyDown={event => {
+      if (event.target !== event.currentTarget || !event.altKey || (event.key !== "ArrowUp" && event.key !== "ArrowDown")) return
+      event.preventDefault()
+      const resized = Math.max(88, Math.min(1200, displayedHeight + (event.key === "ArrowDown" ? 44 : -44)))
+      setManualHeight(resized)
+      rememberManualHeight(resized)
+    }}>{children}</div>
 }
 
 export function SqlViewer({ sql, dialect }: SqlViewerProps) {
   const theme = useSqlTheme()
   return (
-    <ResizableSqlFrame height={320}>
+    <ResizableSqlFrame height={sqlHeight(sql)}>
       <Editor
         height="100%"
         language={languageFor(dialect)}
@@ -175,6 +245,8 @@ export function SqlMergeView({ baseline, candidate, dialect, mode }: SqlMergeVie
       automaticLayout: true,
       renderSideBySide: modeRef.current === "side-by-side",
       originalEditable: false,
+      originalAriaLabel: "Baseline SQL",
+      modifiedAriaLabel: "Candidate SQL",
       diffCodeLens: false,
       enableSplitViewResizing: false,
     })
@@ -205,7 +277,12 @@ export function SqlMergeView({ baseline, candidate, dialect, mode }: SqlMergeVie
   }, [dialect])
 
   useEffect(() => {
-    diffEditor.current?.updateOptions({ renderSideBySide: mode === "side-by-side" })
+    const options: MonacoEditorApi.IStandaloneDiffEditorConstructionOptions = {
+      renderSideBySide: mode === "side-by-side",
+      originalAriaLabel: "Baseline SQL",
+      modifiedAriaLabel: "Candidate SQL",
+    }
+    diffEditor.current?.updateOptions(options)
   }, [mode])
 
   useEffect(() => {
@@ -213,7 +290,7 @@ export function SqlMergeView({ baseline, candidate, dialect, mode }: SqlMergeVie
   }, [theme])
 
   return (
-    <ResizableSqlFrame height={320}>
+    <ResizableSqlFrame height={sqlHeight(baseline, candidate)}>
       <div ref={container} className="size-full" />
     </ResizableSqlFrame>
   )
@@ -258,7 +335,7 @@ export function PlanSqlViewer({ sql, dialect, highlightedSpans, revealSpan, onSe
     })
     decorationIdsRef.current = editor.deltaDecorations(decorationIdsRef.current, decorations)
     const revealRange = revealSpan ? sourceRange(model, revealSpan) : null
-    if (revealRange) editor.revealRangeInCenter(revealRange, monaco.editor.ScrollType.Smooth)
+    if (revealRange) editor.revealRangeInCenter(revealRange, window.matchMedia("(prefers-reduced-motion: reduce)").matches ? monaco.editor.ScrollType.Immediate : monaco.editor.ScrollType.Smooth)
   }, [highlightedSpans, ready, revealSpan, sql])
 
   useEffect(() => {
@@ -287,7 +364,7 @@ export function PlanSqlViewer({ sql, dialect, highlightedSpans, revealSpan, onSe
   return (
     <section aria-label="Executed SQL" className="space-y-2">
       <h3 className="sr-only">Executed SQL batch</h3>
-      <ResizableSqlFrame height={height}>
+      <ResizableSqlFrame height={Math.min(height, sqlHeight(sql))}>
         <Editor
           height="100%"
           language={languageFor(dialect)}

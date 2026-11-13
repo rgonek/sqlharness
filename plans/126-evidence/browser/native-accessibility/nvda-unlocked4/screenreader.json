@@ -1,0 +1,37 @@
+{
+  "startedAt": "2026-11-11T16:23:52.702Z",
+  "mode": "screenreader",
+  "origin": "http://127.0.0.1:<isolated>",
+  "revision": "feac8548bc136f1c3f869f9962d720fcb5b40289",
+  "workingDiffSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+  "checks": [
+    {
+      "name": "skip link reachable from initial reader focus",
+      "active": {
+        "tag": "A",
+        "role": null,
+        "name": "SQLHarness home",
+        "text": "SQLHarness"
+      },
+      "speech": [
+        "Speaking [LangChangeCommand ('en'), 'SQLHarness native accessibility audit', 'document', CancellableSpeech (still valid)]"
+      ],
+      "rawBytes": 2081
+    }
+  ],
+  "limitations": [],
+  "browser": "156.0.8078.4",
+  "nvdaPid": 4000,
+  "error": "Error: Skip link is not keyboard reachable\n    at file:///C:/Users/rgone/MultiCliProfiles/codex/account-b/worktrees/8723/sqlharness/plans/126-evidence/harness/native-accessibility.mjs:96:68",
+  "assets": [
+    {
+      "path": "/assets/index-BjVrJ4lA.js",
+      "sha256": "1a311497f0531ae3dd4120710d01428d7ec223d25c9f3689b65ad9d680a881fe"
+    },
+    {
+      "path": "/assets/index-DBQ2y8xw.css",
+      "sha256": "c966a401419a9dff037b616ccafa01aade3f6e8db5bc4ad36ec780124081cdba"
+    }
+  ],
+  "finishedAt": "2026-11-11T16:24:09.678Z"
+}

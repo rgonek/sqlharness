@@ -10,6 +10,7 @@ projection, expose metric-level availability, and simplify the existing comparis
 **Tech stack:** C#/.NET, SQLite, ASP.NET Core, React/TypeScript, xUnit, Vitest.
 **Spec:** The approved direction is recorded in [Design contract](#design-contract) below.
 **Status:** DONE / VERIFIED on `502f12ed`; all six Terra high task reviews and Sol low whole-branch/final scoped reviews approved. Locally integrated into `main` at `ef580dc` with a passing combined Windows gate; no push. See [integration evidence](125-evidence/integration/integration.md) and [feature verification](125-evidence/verification.md).
+**Dashboard quality follow-up:** Plan126 independently delivered additional ambiguity, selected-pair, navigation and accessibility fixes. This integration preserves both completed implementations; [Plan126 evidence](126-evidence/verification.md) remains historical until the combined tree is verified.
 **Baseline:** `8d8d959f`, inspected 2026-10-29; working tree initially clean.
 **Related work:** Builds on 104/105 statement evidence and 121/122/123 dashboard work.
 Read those contracts when changing their invariants; do not duplicate their collectors or version-label machinery.

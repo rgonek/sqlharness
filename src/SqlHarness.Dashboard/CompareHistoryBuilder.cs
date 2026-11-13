@@ -8,6 +8,7 @@ public sealed record CompareHistoryRow(
     string? CandidateHash, string Status, string StartedAt)
 {
     public bool IsMeasure { get; init; }
+    internal bool HasUsableMeasurement { get; init; } = true;
 }
 
 /// <summary>A collision-free version namespace. Agent kind is kept in the kind field, separate from its id.</summary>
@@ -84,6 +85,8 @@ public static class CompareHistoryBuilder
                         next[key] = Math.Max(next.GetValueOrDefault(key), VersionOrdinal(frozen) + 1);
                         return frozen;
                     }
+                    if (!OptimizationEligibility.IsEligible(row.Status, row.HasUsableMeasurement))
+                        return map.GetValueOrDefault(hash);
                     if (!map.TryGetValue(hash, out var version))
                     {
                         next.TryGetValue(key, out var ordinal);

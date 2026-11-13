@@ -17,9 +17,9 @@ public sealed class OptimizationComparerTests
         };
         var forward = OptimizationComparer.Compare(Group("h1", "h2"), [evidence], "v1", "v2", "all", "sum");
         Assert.Equal(4, forward.CaseOutcomes.Count);
-        Assert.Equal(new OutcomeCounts(4, new ResultCounts(4, 0, 0), new IoCounts(3, 1, 0, 0), new PolicyCounts(3, 1, 0)), forward.OutcomeCounts);
+        Assert.Equal(new NestedOutcomeCounts(4, new ResultCounts(4, 0, 0), new IoCounts(3, 1, 0, 0), new PolicyCounts(3, 1, 0)), forward.OutcomeCounts);
         var selected = OptimizationComparer.Compare(Group("h1", "h2"), [evidence], "v1", "v2", "0", "sum");
-        Assert.Equal(new OutcomeCounts(1, new ResultCounts(1, 0, 0), new IoCounts(1, 0, 0, 0), new PolicyCounts(0, 1, 0)), selected.OutcomeCounts);
+        Assert.Equal(new NestedOutcomeCounts(1, new ResultCounts(1, 0, 0), new IoCounts(1, 0, 0, 0), new PolicyCounts(0, 1, 0)), selected.OutcomeCounts);
         var json = JsonSerializer.SerializeToElement(selected, new JsonSerializerOptions(JsonSerializerDefaults.Web));
         Assert.Equal(1, json.GetProperty("outcomeCounts").GetProperty("policy").GetProperty("fail").GetInt32());
         Assert.Equal(3, forward.CaseOutcomes.Count(c => c.IoOutcome == "better"));
@@ -44,7 +44,7 @@ public sealed class OptimizationComparerTests
         };
         var result = OptimizationComparer.Compare(Group("h1", "h2"), [evidence], "v1", "v2", "all", "sum");
         Assert.Equal(2, result.CaseOutcomes.Count);
-        Assert.Equal(new OutcomeCounts(2, new ResultCounts(1, 1, 0), new IoCounts(0, 0, 1, 1), new PolicyCounts(0, 0, 2)), result.OutcomeCounts);
+        Assert.Equal(new NestedOutcomeCounts(2, new ResultCounts(1, 1, 0), new IoCounts(0, 0, 1, 1), new PolicyCounts(0, 0, 2)), result.OutcomeCounts);
         Assert.Contains(result.Cases, c => c.Id == "1");
         Assert.Equal("1", OptimizationComparer.Compare(Group("h1", "h2"), [evidence], "v1", "v2", "1", "sum").SelectedCase);
         Assert.False(result.CaseOutcomes[0].ResultsEquivalent);
@@ -115,6 +115,336 @@ public sealed class OptimizationComparerTests
         Assert.Equal(1, result.OperationId);
         Assert.Equal(100, result.WholeBatch!.Before);
         Assert.Equal(50, result.WholeBatch.After);
+    }
+
+    [Theory]
+    [InlineData(false, "all")]
+    [InlineData(false, "repeat")]
+    [InlineData(true, "all")]
+    [InlineData(true, "repeat")]
+    public void Colliding_case_fingerprints_never_select_last_metrics_or_drop_script_cases(bool independent, string selection)
+    {
+        var evidence = CollisionEvidence(independent);
+        var section = OptimizationSummaryBuilder.Build(evidence);
+        var group = section.Subjects.Single().Groups.Single();
+        Assert.Equal(40, group.Scopes.Single().Versions.Single(v => v.Version == "v0").ElapsedMedianMs);
+        Assert.Equal(30, group.Scopes.Single().Versions.Single(v => v.Version == "v1").ElapsedMedianMs);
+        var result = OptimizationComparer.Compare(group, evidence, "v0", "v1", selection, "sum", "whole");
+        Assert.Null(result.WholeBatch.Before);
+        Assert.Null(result.WholeBatch.After);
+        Assert.Null(result.Elapsed.BeforeMs);
+        Assert.Null(result.Elapsed.AfterMs);
+        Assert.Null(result.Elapsed.PolicyVerdict);
+        Assert.Equal("unavailable", Assert.Single(result.Cases).Outcome);
+        Assert.Equal(0, result.Outcomes.IoBetter + result.Outcomes.IoSame + result.Outcomes.IoWorse);
+        Assert.Equal(2, result.Outcomes.IoUnavailable);
+        Assert.Equal(2, result.Outcomes.PolicyUnavailable);
+        Assert.Equal(0, result.Outcomes.PolicyPass + result.Outcomes.PolicyFail);
+        Assert.Contains("0 of 2", result.CoverageLabel);
+        Assert.Contains("ambiguous", result.CoverageLabel, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("ambiguous", result.FallbackNote, StringComparison.OrdinalIgnoreCase);
+        if (selection == "all")
+        {
+            Assert.Equal(["0", "1"], result.BeforeAction?.CaseIds);
+            Assert.Equal(["0", "1"], result.AfterAction?.CaseIds);
+            Assert.False(result.BeforeAction!.CaseIdsByFingerprint.ContainsKey("repeat"));
+            Assert.False(result.AfterAction!.CaseIdsByFingerprint.ContainsKey("repeat"));
+        }
+        else
+        {
+            Assert.Null(result.BeforeAction);
+            Assert.Null(result.AfterAction);
+        }
+    }
+
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public void Unique_case_remains_selectable_beside_an_ambiguous_case_identity(bool independent)
+    {
+        var evidence = CollisionEvidence(independent).Select(e => e with
+        {
+            Cases = e.Cases.Concat([new CompareCaseEvidence("2", "unique", null, independent ? null : true, independent ? null : "pass")
+            { MeasurementFingerprint = "unique" }]).ToArray(),
+            Metrics = e.Metrics.Concat(e.IsMeasure
+                ? [Metric("measure", "2", e.BaselineHash == "h0" ? 300 : 200)]
+                : [Metric("baseline", "2", 300), Metric("candidate", "2", 200)]).ToArray(),
+        }).ToArray();
+        var group = OptimizationSummaryBuilder.Build(evidence).Subjects.Single().Groups.Single();
+        var result = OptimizationComparer.Compare(group, evidence, "v0", "v1", "unique", "sum", "whole");
+        Assert.Equal(300, result.WholeBatch.Before);
+        Assert.Equal(200, result.WholeBatch.After);
+        Assert.Equal(1, result.Outcomes.IoBetter);
+        Assert.Equal("2", result.BeforeAction?.CaseIdsByFingerprint["unique"]);
+        Assert.Contains("1 of 3", result.CoverageLabel);
+    }
+
+    [Fact]
+    public void Duplicate_case_metric_rows_do_not_choose_an_arbitrary_representative_in_any_projection()
+    {
+        var evidence = Evidence(1, "h0", "h1", (100, 900));
+        evidence = evidence with { Metrics = evidence.Metrics.Concat([Metric("baseline", "0", 500), Metric("candidate", "0", 50)]).ToArray() };
+        var group = OptimizationSummaryBuilder.Build([evidence]).Subjects.Single().Groups.Single();
+        Assert.All(group.Scopes.Single().Versions, row => { Assert.Null(row.ElapsedMedianMs); Assert.Null(row.LogicalReadsSum); });
+        var result = OptimizationComparer.Compare(group, [evidence], "v0", "v1", "0", "sum");
+        Assert.Null(result.WholeBatch.Before);
+        Assert.Null(result.WholeBatch.After);
+        Assert.Equal("unavailable", Assert.Single(result.Cases).Outcome);
+        Assert.Null(result.BeforeAction);
+    }
+
+    [Fact]
+    public void Metric_only_case_identity_collision_keeps_original_script_ids_and_truthful_coverage()
+    {
+        var source = CollisionEvidence(true).Select(e => e with
+        { Cases = [], Metrics = e.Metrics.Select(m => m with { MeasurementFingerprint = "repeat" }).ToArray() }).ToArray();
+        var result = OptimizationComparer.Compare(Group("h0", "h1"), source, "v0", "v1", "all", "sum");
+        Assert.Null(result.WholeBatch.Before);
+        Assert.Contains("0 of 2", result.CoverageLabel);
+        Assert.Equal(["0", "1"], result.BeforeAction?.CaseIds);
+    }
+
+    private static CompareEvidence[] CollisionEvidence(bool independent)
+    {
+        var source = Evidence(1, "h0", "h1", (100, 900), (500, 50)) with
+        {
+            RegressionVerdict = "fail",
+            Cases = [new("0", "first", null, true, "pass") { MeasurementFingerprint = "repeat" },
+                new("1", "second", null, true, "fail") { MeasurementFingerprint = "repeat" }],
+            Metrics = [Metric("baseline", "0", 100) with { ElapsedMedianMs = 12 }, Metric("baseline", "1", 500) with { ElapsedMedianMs = 28 },
+                Metric("candidate", "0", 900) with { ElapsedMedianMs = 10 }, Metric("candidate", "1", 50) with { ElapsedMedianMs = 20 }],
+        };
+        return !independent ? [source] : new[] { ("h0", "baseline"), ("h1", "candidate") }.Select((pair, i) => source with
+        {
+            OperationId = i + 2,
+            BaselineHash = pair.Item1,
+            CandidateHash = null,
+            IsMeasure = true,
+            RegressionVerdict = null,
+            Cases = source.Cases.Select(c => c with { ResultsEquivalent = null, RegressionVerdict = null }).ToArray(),
+            Metrics = source.Metrics.Where(m => m.Variant == pair.Item2).Select(m => m with { Variant = "measure" }).ToArray(),
+        }).ToArray();
+    }
+
+    [Fact]
+    public void Active_pair_scan_summary_uses_its_exact_direct_operation_and_selected_case_aggregate()
+    {
+        var direct = Evidence(1, "h0", "h1", (100, 80), (100, 80));
+        direct = direct with { Metrics = direct.Metrics.Select(m => m with { ScansSum = m.Variant == "baseline" ? 12 : 28 }).ToArray() };
+        var later = MeasureEvidence(2, "h1", 70) with { Metrics = [Metric("measure", "0", 70) with { ScansSum = 999 }] };
+        var result = OptimizationComparer.Compare(Group("h0", "h1"), [direct, later], "v0", "v1", "all", "sum");
+        Assert.Equal(24, result.ScansBefore);
+        Assert.Equal(56, result.ScansAfter);
+        result = OptimizationComparer.Compare(Group("h0", "h1"), [direct, later], "v0", "v1", "0", "mean");
+        Assert.Equal(12, result.ScansBefore);
+        Assert.Equal(28, result.ScansAfter);
+    }
+
+    [Fact]
+    public void Across_conditions_duplicate_metric_representatives_keep_policy_metrics_and_selected_scripts_unavailable()
+    {
+        var left = MeasureEvidence(2, "h0", 100) with
+        {
+            Cases = [new("0", "first", null, null, null) { VaryingFingerprint = "0" }],
+            Metrics = [Metric("measure", "0", 100), Metric("measure", "0", 500)]
+        };
+        var right = MeasureEvidence(3, "h1", 900) with
+        { Fingerprint = "other", Cases = left.Cases, Metrics = [Metric("measure", "0", 900), Metric("measure", "0", 50)] };
+        var result = OptimizationComparer.CompareAcrossGroups(Group("h0"), Group("h1") with { Fingerprint = "other" },
+            [left, right], "v0", "v1", "0", "sum");
+        Assert.Null(result.WholeBatch.Before);
+        Assert.Null(result.Elapsed.BeforeMs);
+        Assert.Null(result.BeforeAction);
+        Assert.Contains("ambiguous", result.FallbackNote, StringComparison.OrdinalIgnoreCase);
+    }
+
+    [Theory]
+    [InlineData("failed")]
+    [InlineData("cancelled")]
+    [InlineData("rejected")]
+    [InlineData("running")]
+    [InlineData("abandoned")]
+    public void Interrupted_attempts_cannot_supply_pair_evidence(string status)
+    {
+        var result = Compare([Evidence(1, "h1", "h2", (100, 50)) with { Status = status }], "v1", "v2");
+        Assert.Null(result.OperationId);
+        Assert.Empty(result.Cases);
+    }
+
+    [Fact]
+    public void Confirmed_statement_in_partial_batch_keeps_its_counters_without_upgrading_verdict()
+    {
+        var good = Statement("good", "SELECT good", 40, "plan-a") with { CpuMs = 12 };
+        var ambiguous = Statement("bad", "SELECT bad", 60, "plan-b") with { Status = "ambiguous" };
+        var evidence = Evidence(1, "h1", "h2", (100, 80)) with
+        {
+            Metrics = [StatementMetric("baseline", 0, 100, good, ambiguous) with { StatementAttribution = "partial" },
+                StatementMetric("candidate", 0, 80, good with { Reads = 20 }, ambiguous) with { StatementAttribution = "partial" }],
+        };
+        var result = OptimizationComparer.Compare(Group("h1", "h2"), [evidence], "v1", "v2", "0", "sum", "statements");
+        Assert.Equal("whole batch", result.VerdictBasis);
+        var confirmed = Assert.Single(result.Statements, s => s.Key == "good");
+        Assert.Equal(40, confirmed.ReadsBefore);
+        Assert.Equal(20, confirmed.ReadsAfter);
+        Assert.Equal(12, confirmed.CpuBeforeMs);
+        Assert.Null(Assert.Single(result.Statements, s => s.Key == "bad").ReadsBefore);
+        Assert.Contains("100", result.WholeBatch.Label);
+    }
+
+    [Fact]
+    public void Structured_outcomes_keep_IO_independent_from_recorded_policy()
+    {
+        var evidence = Evidence(1, "h1", "h2", (100, 50), (100, 50), (100, 50), (100, 100));
+        evidence = evidence with { Cases = evidence.Cases.Select((c, i) => c with { RegressionVerdict = i == 1 ? "fail" : "pass" }).ToArray() };
+        var json = JsonSerializer.SerializeToElement(Compare([evidence], "v1", "v2"), new JsonSerializerOptions(JsonSerializerDefaults.Web));
+        Assert.True(json.TryGetProperty("outcomes", out var outcomes), "Structured independent outcomes must be projected.");
+        Assert.Equal(3, outcomes.GetProperty("ioBetter").GetInt32());
+        Assert.Equal(1, outcomes.GetProperty("ioSame").GetInt32());
+        Assert.Equal(3, outcomes.GetProperty("policyPass").GetInt32());
+        Assert.Equal(1, outcomes.GetProperty("policyFail").GetInt32());
+        Assert.Equal("1", json.GetProperty("caseOutcomes")[0].GetProperty("caseKey").GetString());
+    }
+
+    [Fact]
+    public void Case_drilldown_retains_mixed_timings_reasons_and_does_not_reverse_recorded_policy()
+    {
+        var evidence = Evidence(1, "h1", "h2", (100, 50), (100, 200), (100, 50)) with { RegressionVerdict = "fail" };
+        evidence = evidence with
+        {
+            Cases = evidence.Cases.Select((c, i) => c with
+            { RegressionVerdict = i == 2 ? "fail" : "pass", PolicyReasons = i == 2 ? ["elapsed-regressed"] : [] }).ToArray(),
+            Metrics = evidence.Metrics.Select(m => m with
+            { ElapsedMedianMs = m.Variant == "baseline" ? 10 : 30, CpuMedianMs = m.Variant == "baseline" ? 12 : 28 }).ToArray(),
+        };
+        var result = Compare([evidence], "v1", "v2");
+        Assert.Equal(new[] { "2", "1", "0" }, result.CaseOutcomes.Select(c => c.CaseKey));
+        var mixed = result.CaseOutcomes[0];
+        Assert.Equal("better", mixed.IoOutcome);
+        Assert.Equal("fail", mixed.PolicyVerdict);
+        Assert.Equal(["elapsed-regressed"], mixed.PolicyReasons);
+        Assert.Equal(10, mixed.ElapsedBeforeMs);
+        Assert.Equal(30, mixed.ElapsedAfterMs);
+        Assert.Equal(12, mixed.CpuBeforeMs);
+        Assert.Equal(28, mixed.CpuAfterMs);
+        var reversed = Compare([evidence], "v2", "v1");
+        Assert.Equal(3, reversed.Outcomes.PolicyUnavailable);
+        Assert.All(reversed.CaseOutcomes, c => { Assert.Null(c.PolicyVerdict); Assert.Empty(c.PolicyReasons); });
+        Assert.Null(reversed.Elapsed.PolicyVerdict);
+        var independent = Compare([MeasureEvidence(2, "h1", 100), MeasureEvidence(3, "h2", 50)], "v1", "v2");
+        Assert.Equal(1, independent.Outcomes.IoBetter);
+        Assert.Equal(1, independent.Outcomes.ResultsUnavailable);
+        Assert.Equal(1, independent.Outcomes.PolicyUnavailable);
+    }
+
+    [Theory]
+    [InlineData("sum", 40d, 20L)]
+    [InlineData("mean", 20d, 10L)]
+    public void Timing_and_all_table_IO_aggregate_case_representatives_without_multiplying_runs(string mode, double timing, long physical)
+    {
+        var evidence = Evidence(1, "h1", "h2", (100, 80), (100, 80));
+        evidence = evidence with
+        {
+            Metrics = evidence.Metrics.Select(m => m with
+            {
+                ElapsedMedianMs = m.CaseId == "0" ? 12 : 28,
+                CpuMedianMs = m.CaseId == "0" ? 12 : 28,
+                TableRows = [new CompareTableIoEvidence("Orders", 90, 10, 2)
+            { PhysicalReads = 10, ReadAheadReads = 20, LobPhysicalReads = 30, LobReadAheadReads = 0 }],
+            }).ToArray()
+        };
+        var result = OptimizationComparer.Compare(Group("h1", "h2"), [evidence], "v1", "v2", "all", mode);
+        Assert.Equal(timing, result.Elapsed.BeforeMs);
+        Assert.Equal(timing, result.CpuBeforeMs);
+        var table = Assert.Single(result.Tables);
+        Assert.Equal(physical, table.PhysicalReadsBefore);
+        Assert.Equal(physical * 2, table.ReadAheadReadsAfter);
+        Assert.Equal(physical * 3, table.LobPhysicalReadsBefore);
+        Assert.Equal(0, table.LobReadAheadReadsAfter);
+        Assert.Equal(mode == "sum" ? 180 : 90, table.DataLogicalReadsBefore);
+        Assert.Equal(mode == "sum" ? 20 : 10, table.LobLogicalReadsBefore);
+        Assert.Equal(mode == "sum" ? 200 : 100, table.ReadsBefore);
+        evidence = evidence with
+        {
+            Metrics = evidence.Metrics.Select((m, i) => i == 0 ? m with
+            { CpuMedianMs = null, TableRows = [m.TableRows[0] with { PhysicalReads = null }] } : m).ToArray()
+        };
+        result = OptimizationComparer.Compare(Group("h1", "h2"), [evidence], "v1", "v2", "all", mode);
+        Assert.Null(result.CpuBeforeMs);
+        Assert.Null(Assert.Single(result.Tables).PhysicalReadsBefore);
+        Assert.Equal(physical, Assert.Single(result.Tables).PhysicalReadsAfter);
+        var single = OptimizationComparer.Compare(Group("h1", "h2"), [evidence], "v1", "v2", "0", mode);
+        Assert.Equal(12, single.Elapsed.BeforeMs);
+    }
+
+    [Fact]
+    public void Partial_statement_availability_covers_each_side_and_missing_or_omitted_contributors()
+    {
+        var confirmed = Statement("good", "SELECT good", 40, "a");
+        var evidence = Evidence(1, "h1", "h2", (100, 80), (100, 80)) with
+        {
+            Metrics = [CaseMetric("baseline", "0", 100, confirmed) with { StatementAttribution = "partial" },
+                CaseMetric("candidate", "0", 80, confirmed with { Status = "ambiguous" }) with { StatementAttribution = "partial" },
+                CaseMetric("baseline", "1", 100) with { OmittedStatements = 1, StatementAttribution = "partial" },
+                CaseMetric("candidate", "1", 80, confirmed)],
+        };
+        var result = OptimizationComparer.Compare(Group("h1", "h2"), [evidence], "v1", "v2", "all", "sum", "statements");
+        var row = Assert.Single(result.Statements);
+        Assert.Null(row.ReadsBefore);
+        Assert.Equal(1, row.MetricAvailabilityBefore["logicalReads"].ContributingCases);
+        Assert.Equal(2, row.MetricAvailabilityBefore["logicalReads"].SelectedCases);
+        Assert.Contains("omitted", row.MetricAvailabilityBefore["logicalReads"].Reason);
+        var selected = OptimizationComparer.Compare(Group("h1", "h2"), [evidence], "v1", "v2", "0", "sum", "statements");
+        row = Assert.Single(selected.Statements);
+        Assert.Equal(40, row.ReadsBefore);
+        Assert.Equal("available", row.MetricAvailabilityBefore["logicalReads"].Status);
+        Assert.Null(row.ReadsAfter);
+        Assert.Contains("Ambiguous", row.MetricAvailabilityAfter["logicalReads"].Reason);
+        Assert.Equal("whole batch", selected.VerdictBasis);
+    }
+
+    [Fact]
+    public void Explicitly_ineligible_statement_and_colliding_occurrences_cannot_supply_counters_or_verdict()
+    {
+        var statement = Statement("good", "SELECT good", 40, "a") with { EvidenceEligible = false };
+        var evidence = Evidence(1, "h1", "h2", (100, 80)) with
+        { Metrics = [StatementMetric("baseline", 0, 100, statement), StatementMetric("candidate", 0, 80, statement)] };
+        var result = OptimizationComparer.Compare(Group("h1", "h2"), [evidence], "v1", "v2", "0", "sum", "statements");
+        Assert.Null(Assert.Single(result.Statements).ReadsBefore);
+        Assert.Equal("whole batch", result.VerdictBasis);
+        statement = statement with { EvidenceEligible = true };
+        evidence = evidence with { Metrics = [StatementMetric("baseline", 0, 100, statement, statement), evidence.Metrics[1]] };
+        result = OptimizationComparer.Compare(Group("h1", "h2"), [evidence], "v1", "v2", "0", "sum", "statements");
+        Assert.Null(Assert.Single(result.Statements).ReadsBefore);
+        Assert.Equal("whole batch", result.VerdictBasis);
+    }
+
+    [Theory]
+    [InlineData(0L)]
+    [InlineData(5L)]
+    public void Recorded_extra_IO_keeps_zero_read_temporary_rows_inspectable(long physical)
+    {
+        var evidence = Evidence(1, "h1", "h2", (0, 0)) with
+        {
+            Metrics = [Metric("baseline", "0", 0) with { TableRows = [new("Worktable", 0, 0, 0) { PhysicalReads = physical }] },
+            Metric("candidate", "0", 0) with { TableRows = [new("Worktable", 0, 0, 0) { PhysicalReads = 0 }] }]
+        };
+        var table = Assert.Single(Compare([evidence], "v1", "v2").Tables);
+        Assert.Equal(physical, table.PhysicalReadsBefore);
+        Assert.Equal(0, table.ReadsBefore);
+    }
+
+    [Fact]
+    public void Missing_table_does_not_prove_zero_for_an_unsupported_historical_counter()
+    {
+        var evidence = Evidence(1, "h1", "h2", (100, 80)) with
+        {
+            Metrics = [Metric("baseline", "0", 100) with { TableRows = [new("Other", 100, 0, 1)] },
+            Metric("candidate", "0", 80) with { TableRows = [new("Orders", 80, 0, 1) { PhysicalReads = 5 }] }]
+        };
+        var row = Compare([evidence], "v1", "v2").Tables.Single(t => t.Table == "Orders");
+        Assert.Equal(0, row.ReadsBefore);
+        Assert.Null(row.PhysicalReadsBefore);
+        Assert.Equal(5, row.PhysicalReadsAfter);
     }
 
     [Theory]
@@ -651,7 +981,7 @@ public sealed class OptimizationComparerTests
         var independent = Assert.Single(result.CaseOutcomes);
         Assert.Equal("better", independent.IoOutcome);
         Assert.Null(independent.PolicyVerdict);
-        Assert.Equal("independently measured", independent.PolicyUnavailableReason);
+        Assert.Equal("Measured independently; no direct recorded policy applies.", independent.PolicyUnavailableReason);
         AssertAction(result.BeforeAction, 201, "candidate", "0");
         AssertAction(result.AfterAction, 214, "baseline", "0");
     }
@@ -883,7 +1213,7 @@ public sealed class OptimizationComparerTests
     }
 
     [Fact]
-    public void Partial_cases_do_not_drop_missing_table_contributors()
+    public void Missing_case_contributor_keeps_coverage_and_does_not_disappear_from_aggregates()
     {
         var evidence = Evidence(214, "h1", "h2", (1000, 500), (1000, 700), (1000, 300)) with
         {
@@ -900,6 +1230,8 @@ public sealed class OptimizationComparerTests
         Assert.Equal("2 of 3 cases", result.CoverageLabel);
         Assert.Equal(3000, result.Tables.Single().ReadsBefore);
         Assert.Null(result.Tables.Single().ReadsAfter);
+        Assert.Null(result.Elapsed.AfterMs);
+        Assert.Equal(1, result.Outcomes.IoUnavailable);
     }
 
     [Fact]
@@ -1068,9 +1400,11 @@ public sealed class OptimizationComparerTests
         var result = OptimizationComparer.CompareAcrossGroups(Group("h0"), Group("h1") with { Fingerprint = "other" }, [left, right], "v0", "v1", "all", "sum");
         Assert.Equal(PairBasis.ApproximateAcrossConditions, result.Basis);
         var outcome = Assert.Single(result.CaseOutcomes);
-        Assert.Equal("better", outcome.IoOutcome);
+        Assert.Equal("unavailable", outcome.IoOutcome);
+        Assert.Equal(100, outcome.ReadsBefore);
+        Assert.Equal(50, outcome.ReadsAfter);
         Assert.Null(outcome.PolicyVerdict);
-        Assert.Equal("different conditions", outcome.PolicyUnavailableReason);
+        Assert.Equal("Different conditions; no direct recorded policy applies.", outcome.PolicyUnavailableReason);
         Assert.Equal("Different conditions — approximate, not a verdict", result.EquivalenceLabel);
         Assert.Equal("1 of 2 cases paired", result.CoverageLabel);
         Assert.Equal("key", Assert.Single(result.TimingContributors).Id);

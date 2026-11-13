@@ -12,4 +12,3 @@ export function executionLabel(row: StatementRow, measured = false): string | nu
   if (measured) return after == null ? null : `${number(after)} ${after === 1 ? "execution" : "executions"}`
   return before == null && after == null ? null : `${number(before)} → ${number(after)} executions`
 }
-

@@ -11,7 +11,7 @@ export function NamedOperationsPage() {
   const [search, setSearch] = useState("")
   const query = useNamedOperations(search.trim() || undefined)
   const operations = query.data?.pages.flatMap(page => page.items) ?? []
-  if (query.error && !query.data) return <ErrorState error={query.error} />
+  if (query.error && !query.data) return <ErrorState error={query.error} onRetry={() => void query.refetch()} retrying={query.isFetching} />
   return <section className="space-y-4">
     <header><h1 className="font-heading text-xl font-semibold">Named operations</h1><p className="text-sm text-muted-foreground">Operations with an agent label, agent keep marker, or owner star.</p></header>
     <div className="grid max-w-lg gap-1 text-sm">

@@ -1,0 +1,23 @@
+{
+  "attemptedAt": "2026-11-11T08:12:27Z",
+  "status": "pending-native-browser-workflow",
+  "screenReader": "NVDA 2026.3.1 AMD64, portable",
+  "installerSha256": "6f80a5b0ca720a7d0d314b5be212f37388bbe81a1107ac3298c1821a1cd3f052",
+  "authenticode": "Valid; NV Access Limited",
+  "configuration": "Dedicated temporary configuration; silence synthesizer; startup sounds and welcome disabled; update checks, usage statistics and add-ons disabled; no machine installation or startup setting changed",
+  "nativeLogExcerpts": [
+    "INFO - core.main (09:10:34.414): NVDA initialized",
+    "DEBUGWARNING - IAccessibleHandler.internalWinEventHandler._shouldGetEvents (09:12:27.430): Foreground took too long to change. Foreground still 0 (). Should be 2622558 (LockScreenControllerProxyWindow)",
+    "IO - speech.speech.speak (09:12:27.443): Speaking [LangChangeCommand ('en'), 'Secure Desktop']"
+  ],
+  "observed": "NVDA ran and its speech pipeline logged native input, but the locked Windows session prevented a native browser foreground. Native key testing and the owned NVDA instance were stopped. No attempt to unlock or bypass the secure desktop was made.",
+  "workflowsProven": [],
+  "pending": [
+    "Skip link and navigation announcements",
+    "Session baseline/candidate radio announcements and native keyboard selection",
+    "Case-outcome dialog announcement and Escape focus return",
+    "Read-only SQL editor announcement, Tab escape and Shift+Tab return"
+  ],
+  "limits": "DOM focus and browser accessibility-tree checks are separate evidence and are not labelled as NVDA results. Raw logs remain outside the repository. No other application content, desktop capture or authentication material is retained here.",
+  "resumeRequirement": "Explicit operator report that the Windows desktop is unlocked. The harness additionally checks the owned audit browser is the native foreground before sending each key."
+}

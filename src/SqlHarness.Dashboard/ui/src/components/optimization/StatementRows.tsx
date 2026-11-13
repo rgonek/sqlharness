@@ -23,6 +23,21 @@ function changeMagnitude(row: StatementRow, measured: boolean): number {
   return measured ? Math.abs(row.readsAfter ?? 0) : -1
 }
 
+export function StatementAvailability({ row, measured = false }: { row: StatementRow; measured?: boolean }) {
+  if (!Object.keys(row.metricAvailabilityBefore ?? {}).length && !Object.keys(row.metricAvailabilityAfter ?? {}).length) return <MetricReasons availability={row.availability} measured={measured} />
+  const labels: Record<string, string> = { logicalReads: "logical reads", scans: "scans", lobLogicalReads: "LOB logical reads", cpuMs: "CPU", elapsedMs: "elapsed", grantRequestedKb: "requested grant", grantGrantedKb: "granted memory", grantMaxUsedKb: "max used memory", hasSpillWarning: "spill warnings" }
+  return <div className="text-xs font-normal text-muted-foreground">{(["Before", "After"] as const).map(side => {
+    const metrics = row[side === "Before" ? "metricAvailabilityBefore" : "metricAvailabilityAfter"]
+    const unavailable = Object.entries(metrics ?? {}).filter(([, availability]) => availability.status !== "available")
+    const groups = new Map<string, string[]>()
+    for (const [name, availability] of unavailable) {
+      const reason = `${availability.reason ?? "unavailable"} (${availability.contributingCases}/${availability.selectedCases} cases)`
+      groups.set(reason, [...groups.get(reason) ?? [], labels[name] ?? name])
+    }
+    return [...groups].map(([reason, names]) => <p key={`${side}:${reason}`}>{side}: {names.join(", ")} — {reason}</p>)
+  })}</div>
+}
+
 export function MetricReasons({ availability, measured = false }: { availability?: Record<string, MetricAvailabilityPair> | null; measured?: boolean }) {
   if (!availability) return null
   const groups = new Map<string, string[]>()
@@ -100,10 +115,11 @@ export function StatementRows({ rows, measured = false, postgres = false }: { ro
           {row.hiddenWork.length > 0 && <div className="mt-2 flex flex-wrap gap-1" aria-label={`Hidden work for statement ${index + 1}`}>
             {row.hiddenWork.map((item, itemIndex) => <HiddenWorkFlag key={`${item.kind}:${item.name}:${itemIndex}`} item={item} />)}
           </div>}
+          <StatementAvailability row={row} measured={measured} />
           <StatementMetrics row={row} measured={measured} />
           <Objects row={row} measured={measured} />
         </TableCell>
-        <TableCell className="whitespace-normal">{statusLabels[row.status] ?? row.status}<div className="flex flex-col"><MetricReasons availability={row.availability} measured={measured} /></div></TableCell>
+        <TableCell className="whitespace-normal">{statusLabels[row.status] ?? row.status}</TableCell>
         {hasExecutions && <TableCell>{executionLabel(row, measured) ?? "—"}</TableCell>}
         {measured ? <>{hasScansAfter && <TableCell>{number(row.scansAfter)}</TableCell>}{hasReadsAfter && <TableCell>{number(row.readsAfter)}</TableCell>}</>
           : <>{hasReadsBefore && <TableCell>{number(row.readsBefore)}</TableCell>}{hasReadsAfter && <TableCell>{number(row.readsAfter)}</TableCell>}{hasReadsBefore && hasReadsAfter && <TableCell className="whitespace-normal">{row.change}</TableCell>}</>}

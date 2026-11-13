@@ -1,0 +1,36 @@
+{
+  "revision": "85c75cb2f2219ac36c0c4e89ea362e99968f0c71",
+  "checks": [
+    {
+      "name": "busy keyboard copy preserves focus and blocks duplicate activation",
+      "passed": true,
+      "detail": {
+        "clipboardCalls": 1,
+        "focusRetained": true
+      }
+    },
+    {
+      "name": "Tab leaves copy and Shift+Tab returns",
+      "passed": true
+    },
+    {
+      "name": "manual copy retains full text and returns focus",
+      "passed": true
+    },
+    {
+      "name": "candidate keyboard copy preserves text and focus",
+      "passed": true
+    },
+    {
+      "name": "large bounded SQL copies full original and preserves keyboard focus",
+      "passed": true,
+      "detail": {
+        "lines": 6000,
+        "bytes": 329999,
+        "focusRetained": true
+      }
+    }
+  ],
+  "source": "Actual isolated Release; synthetic journal; intercepted Clipboard delay/failure and large SQL",
+  "finishedAt": "2026-11-11T19:10:09.622Z"
+}

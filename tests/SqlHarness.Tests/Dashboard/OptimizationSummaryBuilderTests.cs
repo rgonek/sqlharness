@@ -4,6 +4,90 @@ namespace SqlHarness.Tests.Dashboard;
 
 public sealed class OptimizationSummaryBuilderTests
 {
+    [Theory]
+    [InlineData("failed")]
+    [InlineData("cancelled")]
+    [InlineData("rejected")]
+    [InlineData("running")]
+    [InlineData("abandoned")]
+    public void Interrupted_attempts_do_not_create_versions_even_with_retained_metrics(string status)
+    {
+        var evidence = Compare(1, "orders", "whole", "db", "f", "h0", "h1", status: status);
+        Assert.Empty(OptimizationSummaryBuilder.Build([evidence]).Subjects);
+    }
+
+    [Fact]
+    public void Policy_failure_remains_eligible_and_historical_frozen_labels_do_not_renumber()
+    {
+        var failed = Compare(1, "orders", "whole", "db", "f", "h0", "failed-hash", status: "failed");
+        var succeeded = Compare(2, "orders", "whole", "db", "f", "h0", "h1") with
+        { RegressionVerdict = "fail", Cases = [new("0", "case", null, true, "fail") { PolicyReasons = ["elapsed-regressed"] }] };
+        var frozen = new Dictionary<(string Subject, string Scope, string Hash), string>
+        { [("orders", "whole", "h0")] = "v0", [("orders", "whole", "failed-hash")] = "v1", [("orders", "whole", "h1")] = "v2" };
+        var group = OptimizationSummaryBuilder.Build([failed, succeeded], ContextKey.AgentSession("codex", "synthetic"), frozen, false)
+            .Subjects.Single().Groups.Single();
+        Assert.Equal(["v0", "v2"], group.Scopes.Single().Versions.Select(v => v.Version));
+        Assert.Equal("v2", group.DefaultB);
+        Assert.Equal(1, group.Scopes.Single().Versions.Single(v => v.Version == "v2").Outcomes.PolicyFail);
+        Assert.Empty(OptimizationSummaryBuilder.Build([succeeded with { Metrics = [] }]).Subjects);
+    }
+
+    [Fact]
+    public void Default_timing_summary_is_sum_of_all_case_medians_and_requires_complete_coverage()
+    {
+        var evidence = Compare(1, "orders", "whole", "db", "f", "h0", "h1") with
+        {
+            Cases = [new("0", "first", null, true, null), new("1", "second", null, true, null)],
+            Metrics = [Metric("baseline", "0", 12), Metric("baseline", "1", 28), Metric("candidate", "0", 9)],
+        };
+        var versions = OptimizationSummaryBuilder.Build([evidence]).Subjects.Single().Groups.Single().Scopes.Single().Versions;
+        Assert.Equal(40, versions.Single(v => v.Hash == "h0").ElapsedMedianMs);
+        Assert.Null(versions.Single(v => v.Hash == "h1").ElapsedMedianMs);
+        Assert.Null(versions.Single(v => v.Hash == "h1").LogicalReadsSum);
+    }
+
+    [Fact]
+    public void Case_timing_projection_preserves_identity_CPU_and_baseline_measurement_without_self_verdict()
+    {
+        var evidence = Compare(1, "orders", "whole", "db", "f", "h0", "h1") with
+        {
+            Cases = [new("0", "first", null, true, "pass") { MeasurementFingerprint = "same-case", VaryingFingerprint = "varying-case" }],
+            Metrics = [Metric("baseline", 12) with { CpuMedianMs = 28 }, Metric("candidate", 9)],
+        };
+        var row = OptimizationSummaryBuilder.Build([evidence]).Subjects.Single().Groups.Single().Scopes.Single().Versions.Single(v => v.Hash == "h0");
+        var metric = Assert.Single(row.MetricCases);
+        Assert.Equal("same-case", metric.CaseKey);
+        Assert.Equal("varying-case", metric.VaryingFingerprint);
+        Assert.Equal(12, metric.ElapsedMs);
+        Assert.Equal(28, row.CpuMedianMs);
+        Assert.Equal(0, row.Outcomes.IoBetter + row.Outcomes.IoSame + row.Outcomes.IoWorse);
+        Assert.Equal(0, row.Outcomes.PolicyPass + row.Outcomes.PolicyFail);
+        var detail = Assert.Single(row.CaseOutcomes);
+        Assert.Equal(12, detail.ElapsedBeforeMs);
+        Assert.Null(detail.ElapsedAfterMs);
+        var measured = Measure(2, "orders", "whole", "db", "f", "h0", 15);
+        row = OptimizationSummaryBuilder.Build([evidence, measured]).Subjects.Single().Groups.Single().Scopes.Single().Versions.Single(v => v.Hash == "h0");
+        Assert.Equal(15, Assert.Single(row.CaseOutcomes).ElapsedBeforeMs);
+        Assert.Equal(1, row.Outcomes.PolicyUnavailable);
+        Assert.Equal(1, row.Outcomes.ResultsUnavailable);
+    }
+
+    [Fact]
+    public void Repeated_measurement_identity_retains_case_timings_without_crashing_or_borrowing_a_policy_verdict()
+    {
+        var evidence = Compare(1, "orders", "whole", "db", "f", "h0", "h1") with
+        {
+            Cases = [new("0", "first", null, true, "pass") { MeasurementFingerprint = "repeat" },
+                new("1", "second", null, true, "fail") { MeasurementFingerprint = "repeat" }],
+            Metrics = [Metric("baseline", "0", 12), Metric("baseline", "1", 28),
+                Metric("candidate", "0", 10), Metric("candidate", "1", 20)],
+        };
+        var candidate = OptimizationSummaryBuilder.Build([evidence]).Subjects.Single().Groups.Single().Scopes.Single().Versions.Single(v => v.Hash == "h1");
+        Assert.Equal(2, candidate.MetricCases.Count);
+        Assert.Equal(30, candidate.ElapsedMedianMs);
+        Assert.Equal(0, candidate.Outcomes.PolicyPass + candidate.Outcomes.PolicyFail);
+    }
+
     [Fact]
     public void Statement_metadata_alone_is_not_measurement_but_confirmed_zero_is()
     {

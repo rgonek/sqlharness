@@ -4,7 +4,18 @@ import { applyTheme, readThemeMode, writeThemeMode } from "@/lib/theme"
 afterEach(() => {
   vi.restoreAllMocks()
   localStorage.clear()
-  document.documentElement.classList.remove("dark")
+  document.documentElement.classList.remove("dark", "theme-changing")
+})
+
+test("theme changes suppress transitions until the new colours have painted", () => {
+  const frames: FrameRequestCallback[] = []
+  vi.spyOn(window, "requestAnimationFrame").mockImplementation(callback => { frames.push(callback); return frames.length })
+  applyTheme("dark")
+  expect(document.documentElement).toHaveClass("dark", "theme-changing")
+  frames.shift()!(0)
+  expect(document.documentElement).toHaveClass("theme-changing")
+  frames.shift()!(16)
+  expect(document.documentElement).not.toHaveClass("theme-changing")
 })
 
 test("mode round-trips through localStorage and defaults to system", () => {

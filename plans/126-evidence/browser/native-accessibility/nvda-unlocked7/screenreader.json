@@ -1,0 +1,256 @@
+{
+  "startedAt": "2026-11-11T16:29:54.582Z",
+  "mode": "screenreader",
+  "origin": "http://127.0.0.1:<isolated>",
+  "revision": "feac8548bc136f1c3f869f9962d720fcb5b40289",
+  "workingDiffSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+  "checks": [
+    {
+      "name": "skip link reachable from initial reader focus",
+      "active": {
+        "tag": "A",
+        "role": null,
+        "name": null,
+        "text": "Skip to main content"
+      },
+      "speech": [
+        "Speaking [LangChangeCommand ('en'), 'Skip to main content', 'same page', 'link']"
+      ],
+      "rawBytes": 1785
+    },
+    {
+      "name": "skip link Enter reaches main",
+      "active": {
+        "tag": "MAIN",
+        "role": null,
+        "name": null,
+        "text": "ActivityFiltersTimeLast 7 daysAgentAnyDirectoryAnyTargetAnyStarred50Include archivedStatusRunning0Failed1Rejected0Succeeded99Abandoned0TypeCompare50Query50Marke"
+      },
+      "speech": [
+        "Speaking [LangChangeCommand ('en'), 'main landmark', 'Activity feed', 'region', 'Activity', 'heading', 'level 1', 'clickable', ' ', 'Search activity', 'edit', 'Search label, session, target', ' ', 'Time', 'combo box', 'collapsed', 'opens list', 'Time Last 7 days', 'Agent', 'button', 'collapsed', 'opens dialog', 'Directory', 'button', 'collapsed', 'opens dialog', 'Target', 'button', 'collapsed', 'opens dialog', 'Starred50', 'toggle button', 'not pressed', 'Include archived', 'toggle button', 'not pressed', 'Status', 'Running0', 'toggle button', 'not pressed', 'Failed1', 'toggle button', 'not pressed', 'Rejected0', 'toggle button', 'not pressed', 'Succeeded99', 'toggle button', 'not pressed', 'Abandoned0', 'toggle button', 'not pressed', 'Type', 'Compare50', 'toggle button', 'not pressed', 'Query50', 'toggle button', 'not pressed', 'Marked', 'Named49', 'toggle button', 'not pressed', '100 loaded operations · 101 sessions', 'Session history', 'link', 'Expand all', 'button', 'Investigation 500', 'region', 'clickable', 'Expand Investigation 500', 'button', 'collapsed', 'Star session Investigation 500', 'toggle button', 'not pressed', 'Investigation 500', 'link', 'Codex · cli', 'D:/Synthetic/Shop', '1 hr ago', '1 shown / 18 ops', 'out of region', 'Investigation 499', 'region', 'clickable', 'Expand Investigation 499', 'button', 'collapsed', 'Star session Investigation 499', 'toggle button', 'not pressed', 'Investigation 499', 'link', 'Claude Code · cli', 'D:/Synthetic/Shop', '1 hr ago', '1 shown / 18 ops', 'out of region', 'Investigation 498', 'region', 'clickable', 'Expand Investigation 498', 'button', 'collapsed', 'Star session Investigation 498', 'toggle button', 'not pressed', 'Investigation 498', 'link', 'Codex · cli', 'D:/Synthetic/Shop', '1 hr ago', '1 shown / 18 ops', 'out of region', 'Investigation 497', 'region', 'clickable', 'Expand Investigation 497', 'button', 'collapsed', 'Star session Investigation 497', 'toggle button', 'not pressed', 'Investigation 497', 'link', 'Claude Code · cli', 'D:/Synthetic/Shop', '1 hr ago', '1 shown / 18 ops', 'out of region', 'Investigation 496', 'region', 'clickable', 'Expand Investigation 496', 'button', 'collapsed', 'Star session Investigation 496', 'toggle button', 'not pressed', 'Investigation 496', 'link', 'Codex · cli', 'D:/Synthetic/Shop', '1 hr ago', '1 shown / 18 ops', 'out of region', 'Investigation 495', 'region', 'clickable', 'Expand Investigation 495', 'button', 'collapsed', 'Star session Investigation 495', 'toggle button', 'not pressed', 'Investigation 495', 'link', 'Claude Code · cli', 'D:/Synthetic/Shop', '1 hr ago', '1 shown / 18 ops', 'out of region', 'Investigation 494', 'region', 'clickable', 'Expand Investigation 494', 'button', 'collapsed', 'Star session Investigation 494', 'toggle button', 'not pressed', 'Investigation 494', 'link', 'Codex · cli', 'D:/Synthetic/Shop', '1 hr ago', '1 shown / 18 ops', 'out of region', 'Investigation 493', 'region', 'clickable', 'Expand Investigation 493', 'button', 'collapsed', 'Star session Investigation 493', 'toggle button', 'not pressed', 'Investigation 493', 'link', 'Claude Code · cli', 'D:/Synthetic/Shop', '1 hr ago', '1 shown / 18 ops', 'out of region', 'Investigation 492', 'region', 'clickable', 'Expand Investigation 492', 'button', 'collapsed', 'Star session Investigation 492', 'toggle button', 'not pressed', 'Investigation 492', 'link', 'Codex · cli', 'D:/Synthetic/Shop', '1 hr ago', '1 shown / 18 ops', 'out of region', 'Investigation 491', 'region', 'clickable', 'Expand Investigation 491', 'button', 'collapsed', 'Star session Investigation 491', 'toggle button', 'not pressed', 'Investigation 491', 'link', 'Claude Code · cli', 'D:/Synthetic/Shop', '1 hr ago', '1 shown / 18 ops', 'out of region', 'Investigation 490', 'region', 'clickable', 'Expand Investigation 490', 'button', 'collapsed', 'Star session Investigation 490', 'toggle button', 'not pressed', 'Investigation 490', 'link', 'Codex · cli', 'D:/Synthetic/Shop', '1 hr ago', '1 shown / 18 ops', 'out of region', 'Investigation 489', 'region', 'clickable', 'Expand Investigation 489', 'button', 'collapsed', 'Star session Investigation 489', 'toggle button', 'not pressed', 'Investigation 489', 'link', 'Claude Code · cli', 'D:/Synthetic/Shop', '1 hr ago', '1 shown / 18 ops', 'out of region', 'Investigation 488', 'region', 'clickable', 'Expand Investigation 488', 'button', 'collapsed', 'Star session Investigation 488', 'toggle button', 'not pressed', 'Investigation 488', 'link', 'Codex · cli', 'D:/Synthetic/Shop', '1 hr ago', '1 shown / 18 ops', 'out of region', 'Investigation 487', 'region', 'clickable', 'Expand Investigation 487', 'button', 'collapsed', 'Star session Investigation 487', 'toggle button', 'not pressed', 'Investigation 487', 'link', 'Claude Code · cli', 'D:/Synthetic/Shop', '1 hr ago', '1 shown / 18 ops', 'out of region', 'Investigation 486', 'region', 'clickable', 'Expand Investigation 486', 'button', 'collapsed', 'Star session Investigation 486', 'toggle button', 'not pressed', 'Investigation 486', 'link', 'Codex · cli', 'D:/Synthetic/Shop', '1 hr ago', '1 shown / 18 ops', 'out of region', 'Investigation 485', 'region', 'clickable', 'Expand Investigation 485', 'button', 'collapsed', 'Star session Investigation 485', 'toggle button', 'not pressed', 'Investigation 485', 'link', 'Claude Code · cli', 'D:/Synthetic/Shop', '1 hr ago', '1 shown / 18 ops', 'out of region', 'Investigation 484', 'region', 'clickable', 'Expand Investigation 484', 'button', 'collapsed', 'Star session Investigation 484', 'toggle button', 'not pressed', 'Investigation 484', 'link', 'Codex · cli', 'D:/Synthetic/Shop', '1 hr ago', '1 shown / 18 ops', 'out of region', 'Investigation 483', 'region', 'clickable', 'Expand Investigation 483', 'button', 'collapsed', 'Star session Investigation 483', 'toggle button', 'not pressed', 'Investigation 483', 'link', 'Claude Code · cli', 'D:/Synthetic/Shop', '1 hr ago', '1 shown / 18 ops', 'out of region', 'Investigation 482', 'region', 'clickable', 'Expand Investigation 482', 'button', 'collapsed', 'Star session Investigation 482', 'toggle button', 'not pressed', 'Investigation 482', 'link', 'Codex · cli', 'D:/Synthetic/Shop', '1 hr ago', '1 shown / 18 ops', 'out of region', 'Investigation 481', 'region', 'clickable', 'Expand Investigation 481', 'button', 'collapsed', 'Star session Investigation 481', 'toggle button', 'not pressed', 'Investigation 481', 'link', 'Claude Code · cli', 'D:/Synthetic/Shop', '1 hr ago', '1 shown / 18 ops', 'out of region', 'Investigation 480', 'region', 'clickable', 'Expand Investigation 480', 'button', 'collapsed', 'Star session Investigation 480', 'toggle button', 'not pressed', 'Investigation 480', 'link', 'Codex · cli', 'D:/Synthetic/Shop', '1 hr ago', '1 shown / 18 ops', 'out of region', 'Investigation 479', 'region', 'clickable', 'Expand Investigation 479', 'button', 'collapsed', 'Star session Investigation 479', 'toggle button', 'not pressed', 'Investigation 479', 'link', 'Claude Code · cli', 'D:/Synthetic/Shop', '1 hr ago', '1 shown / 18 ops', 'out of region', 'Investigation 478', 'region', 'clickable', 'Expand Investigation 478', 'button', 'collapsed', 'Star session Investigation 478', 'toggle button', 'not pressed', 'Investigation 478', 'link', 'Codex · cli', 'D:/Synthetic/Shop', '1 hr ago', '1 shown / 18 ops', 'out of region', 'Investigation 477', 'region', 'clickable', 'Expand Investigation 477', 'button', 'collapsed', 'Star session Investigation 477', 'toggle button', 'not pressed', 'Investigation 477', 'link', 'Claude Code · cli', 'D:/Synthetic/Shop', '1 hr ago', '1 shown / 18 ops', 'out of region', 'Investigation 476', 'region', 'clickable', 'Expand Investigation 476', 'button', 'collapsed', 'Star session Investigation 476', 'toggle button', 'not pressed', 'Investigation 476', 'link', 'Codex · cli', 'D:/Synthetic/Shop', '1 hr ago', '1 shown / 18 ops', 'out of region', 'Investigation 475', 'region', 'clickable', 'Expand Investigation 475', 'button', 'collapsed', 'Star session Investigation 475', 'toggle button', 'not pressed', 'Investigation 475', 'link', 'Claude Code · cli', 'D:/Synthetic/Shop', '1 hr ago', '1 shown / 18 ops', 'out of region', 'Investigation 474', 'region', 'clickable', 'Expand Investigation 474', 'button', 'collapsed', 'Star session Investigation 474', 'toggle button', 'not pressed', 'Investigation 474', 'link', 'Codex · cli', 'D:/Synthetic/Shop', '1 hr ago', '1 shown / 18 ops', 'out of region', 'Investigation 473', 'region', 'clickable', 'Expand Investigation 473', 'button', 'collapsed', 'Star session Investigation 473', 'toggle button', 'not pressed', 'Investigation 473', 'link', 'Claude Code · cli', 'D:/Synthetic/Shop', '1 hr ago', '1 shown / 18 ops', 'out of region', 'Investigation 472', 'region', 'clickable', 'Expand Investigation 472', 'button', 'collapsed', 'Star session Investigation 472', 'toggle button', 'not pressed', 'Investigation 472', 'link', 'Codex · cli', 'D:/Synthetic/Shop', '1 hr ago', '1 shown / 18 ops', 'out of region', 'Investigation 471', 'region', 'clickable', 'Expand Investigation 471', 'button', 'collapsed', 'Star session Investigation 471', 'toggle button', 'not pressed', 'Investigation 471', 'link', 'Claude Code · cli', 'D:/Synthetic/Shop', '1 hr ago', '1 shown / 18 ops', 'out of region', 'Investigation 470', 'region', 'clickable', 'Expand Investigation 470', 'button', 'collapsed', 'Star session Investigation 470', 'toggle button', 'not pressed', 'Investigation 470', 'link', 'Codex · cli', 'D:/Synthetic/Shop', '1 hr ago', '1 shown / 18 ops', 'out of region', 'Investigation 469', 'region', 'clickable', 'Expand Investigation 469', 'button', 'collapsed', 'Star session Investigation 469', 'toggle button', 'not pressed', 'Investigation 469', 'link', 'Claude Code · cli', 'D:/Synthetic/Shop', '1 hr ago', '1 shown / 18 ops', 'out of region', 'Investigation 468', 'region', 'clickable', 'Expand Investigation 468', 'button', 'collapsed', 'Star session Investigation 468', 'toggle button', 'not pressed', 'Investigation 468', 'link', 'Codex · cli', 'D:/Synthetic/Shop', '1 hr ago', '0 shown / 18 ops', 'out of region', 'Investigation 467', 'region', 'clickable', 'Expand Investigation 467', 'button', 'collapsed', 'Star session Investigation 467', 'toggle button', 'not pressed', 'Investigation 467', 'link', 'Claude Code · cli', 'D:/Synthetic/Shop', '1 hr ago', '0 shown / 18 ops', 'out of region', 'Investigation 466', 'region', 'clickable', 'Expand Investigation 466', 'button', 'collapsed', 'Star session Investigation 466', 'toggle button', 'not pressed', 'Investigation 466', 'link', 'Codex · cli', 'D:/Synthetic/Shop', '1 hr ago', '0 shown / 18 ops', 'out of region', 'Investigation 465', 'region', 'clickable', 'Expand Investigation 465', 'button', 'collapsed', 'Star session Investigation 465', 'toggle button', 'not pressed', 'Investigation 465', 'link', 'Claude Code · cli', 'D:/Synthetic/Shop', '1 hr ago', '0 shown / 18 ops', 'out of region', 'Investigation 464', 'region', 'clickable', 'Expand Investigation 464', 'button', 'collapsed', 'Star session Investigation 464', 'toggle button', 'not pressed', 'Investigation 464', 'link', 'Codex · cli', 'D:/Synthetic/Shop', '1 hr ago', '0 shown / 18 ops', 'out of region', 'Investigation 463', 'region', 'clickable', 'Expand Investigation 463', 'button', 'collapsed', 'Star session Investigation 463', 'toggle button', 'not pressed', 'Investigation 463', 'link', 'Claude Code · cli', 'D:/Synthetic/Shop', '1 hr ago', '0 shown / 18 ops', 'out of region', 'Investigation 462', 'region', 'clickable', 'Expand Investigation 462', 'button', 'collapsed', 'Star session Investigation 462', 'toggle button', 'not pressed', 'Investigation 462', 'link', 'Codex · cli', 'D:/Synthetic/Shop', '1 hr ago', '0 shown / 18 ops', 'out of region', 'Investigation 461', 'region', 'clickable', 'Expand Investigation 461', 'button', 'collapsed', 'Star session Investigation 461', 'toggle button', 'not pressed', 'Investigation 461', 'link', 'Claude Code · cli', 'D:/Synthetic/Shop', '1 hr ago', '0 shown / 18 ops', 'out of region', 'Investigation 460', 'region', 'clickable', 'Expand Investigation 460', 'button', 'collapsed', 'Star session Investigation 460', 'toggle button', 'not pressed', 'Investigation 460', 'link', 'Codex · cli', 'D:/Synthetic/Shop', '1 hr ago', '0 shown / 18 ops', 'out of region', 'Investigation 459', 'region', 'clickable', 'Expand Investigation 459', 'button', 'collapsed', 'Star session Investigation 459', 'toggle button', 'not pressed', 'Investigation 459', 'link', 'Claude Code · cli', 'D:/Synthetic/Shop', '1 hr ago', '0 shown / 18 ops', 'out of region', 'Investigation 458', 'region', 'clickable', 'Expand Investigation 458', 'button', 'collapsed', 'Star session Investigation 458', 'toggle button', 'not pressed', 'Investigation 458', 'link', 'Codex · cli', 'D:/Synthetic/Shop', '1 hr ago', '0 shown / 18 ops', 'out of region', 'Investigation 457', 'region', 'clickable', 'Expand Investigation 457', 'button', 'collapsed', 'Star session Investigation 457', 'toggle button', 'not pressed', 'Investigation 457', 'link', 'Claude Code · cli', 'D:/Synthetic/Shop', '1 hr ago', '0 shown / 18 ops', 'out of region', 'Investigation 456', 'region', 'clickable', 'Expand Investigation 456', 'button', 'collapsed', 'Star session Investigation 456', 'toggle button', 'not pressed', 'Investigation 456', 'link', 'Codex · cli', 'D:/Synthetic/Shop', '1 hr ago', '0 shown / 18 ops', 'out of region', 'Investigation 455', 'region', 'clickable', 'Expand Investigation 455', 'button', 'collapsed', 'Star session Investigation 455', 'toggle button', 'not pressed', 'Investigation 455', 'link', 'Claude Code · cli', 'D:/Synthetic/Shop', '1 hr ago', '0 shown / 18 ops', 'out of region', 'Investigation 454', 'region', 'clickable', 'Expand Investigation 454', 'button', 'collapsed', 'Star session Investigation 454', 'toggle button', 'not pressed', 'Investigation 454', 'link', 'Codex · cli', 'D:/Synthetic/Shop', '1 hr ago', '0 shown / 18 ops', 'out of region', 'Investigation 453', 'region', 'clickable', 'Expand Investigation 453', 'button', 'collapsed', 'Star session Investigation 453', 'toggle button', 'not pressed', 'Investigation 453', 'link', 'Claude Code · cli', 'D:/Synthetic/Shop', '1 hr ago', '0 shown / 18 ops', 'out of region', 'Investigation 452', 'region', 'clickable', 'Expand Investigation 452', 'button', 'collapsed', 'Star session Investigation 452', 'toggle button', 'not pressed', 'Investigation 452', 'link', 'Codex · cli', 'D:/Synthetic/Shop', '1 hr ago', '0 shown / 18 ops', 'out of region', 'Investigation 451', 'region', 'clickable', 'Expand Investigation 451', 'button', 'collapsed', 'Star session Investigation 451', 'toggle button', 'not pressed', 'Investigation 451', 'link', 'Claude Code · cli', 'D:/Synthetic/Shop', '1 hr ago', '0 shown / 18 ops', 'out of region', 'Investigation 450', 'region', 'clickable', 'Expand Investigation 450', 'button', 'collapsed', 'Star session Investigation 450', 'toggle button', 'not pressed', 'Investigation 450', 'link', 'Codex · cli', 'D:/Synthetic/Shop', '1 hr ago', '0 shown / 18 ops', 'out of region', 'Investigation 449', 'region', 'clickable', 'Expand Investigation 449', 'button', 'collapsed', 'Star session Investigation 449', 'toggle button', 'not pressed', 'Investigation 449', 'link', 'Claude Code · cli', 'D:/Synthetic/Shop', '1 hr ago', '0 shown / 18 ops', 'out of region', 'Investigation 448', 'region', 'clickable', 'Expand Investigation 448', 'button', 'collapsed', 'Star session Investigation 448', 'toggle button', 'not pressed', 'Investigation 448', 'link', 'Codex · cli', 'D:/Synthetic/Shop', '1 hr ago', '0 shown / 18 ops', 'out of region', 'Investigation 447', 'region', 'clickable', 'Expand Investigation 447', 'button', 'collapsed', 'Star session Investigation 447', 'toggle button', 'not pressed', 'Investigation 447', 'link', 'Claude Code · cli', 'D:/Synthetic/Shop', '1 hr ago', '0 shown / 18 ops', 'out of region', 'Investigation 446', 'region', 'clickable', 'Expand Investigation 446', 'button', 'collapsed', 'Star session Investigation 446', 'toggle button', 'not pressed', 'Investigation 446', 'link', 'Codex · cli', 'D:/Synthetic/Shop', '1 hr ago', '0 shown / 18 ops', 'out of region', 'Investigation 445', 'region', 'clickable', 'Expand Investigation 445', 'button', 'collapsed', 'Star session Investigation 445', 'toggle button', 'not pressed', 'Investigation 445', 'link', 'Claude Code · cli', 'D:/Synthetic/Shop', '1 hr ago', '0 shown / 18 ops', 'out of region', 'Investigation 444', 'region', 'clickable', 'Expand Investigation 444', 'button', 'collapsed', 'Star session Investigation 444', 'toggle button', 'not pressed', 'Investigation 444', 'link', 'Codex · cli', 'D:/Synthetic/Shop', '1 hr ago', '0 shown / 18 ops', 'out of region', 'Investigation 443', 'region', 'clickable', 'Expand Investigation 443', 'button', 'collapsed', 'Star session Investigation 443', 'toggle button', 'not pressed', 'Investigation 443', 'link', 'Claude Code · cli', 'D:/Synthetic/Shop', '1 hr ago', '0 shown / 18 ops', 'out of region', 'Investigation 442', 'region', 'clickable', 'Expand Investigation 442', 'button', 'collapsed', 'Star session Investigation 442', 'toggle button', 'not pressed', 'Investigation 442', 'link', 'Codex · cli', 'D:/Synthetic/Shop', '1 hr ago', '0 shown / 18 ops', 'out of region', 'Investigation 441', 'region', 'clickable', 'Expand Investigation 441', 'button', 'collapsed', 'Star session Investigation 441', 'toggle button', 'not pressed', 'Investigation 441', 'link', 'Claude Code · cli', 'D:/Synthetic/Shop', '1 hr ago', '0 shown / 18 ops', 'out of region', 'Investigation 440', 'region', 'clickable', 'Expand Investigation 440', 'button', 'collapsed', 'Star session Investigation 440', 'toggle button', 'not pressed', 'Investigation 440', 'link', 'Codex · cli', 'D:/Synthetic/Shop', '1 hr ago', '0 shown / 18 ops', 'out of region', 'Investigation 439', 'region', 'clickable', 'Expand Investigation 439', 'button', 'collapsed', 'Star session Investigation 439', 'toggle button', 'not pressed', 'Investigation 439', 'link', 'Claude Code · cli', 'D:/Synthetic/Shop', '1 hr ago', '0 shown / 18 ops', 'out of region', 'Investigation 438', 'region', 'clickable', 'Expand Investigation 438', 'button', 'collapsed', 'Star session Investigation 438', 'toggle button', 'not pressed', 'Investigation 438', 'link', 'Codex · cli', 'D:/Synthetic/Shop', '1 hr ago', '0 shown / 18 ops', 'out of region', 'Investigation 437', 'region', 'clickable', 'Expand Investigation 437', 'button', 'collapsed', 'Star session Investigation 437', 'toggle button', 'not pressed', 'Investigation 437', 'link', 'Claude Code · cli', 'D:/Synthetic/Shop', '1 hr ago', '0 shown / 18 ops', 'out of region', 'Investigation 436', 'region', 'clickable', 'Expand Investigation 436', 'button', 'collapsed', 'Star session Investigation 436', 'toggle button', 'not pressed', 'Investigation 436', 'link', 'Codex · cli', 'D:/Synthetic/Shop', '1 hr ago', '0 shown / 18 ops', 'out of region', 'Investigation 435', 'region', 'clickable', 'Expand Investigation 435', 'button', 'collapsed', 'Star session Investigation 435', 'toggle button', 'not pressed', 'Investigation 435', 'link', 'Claude Code · cli', 'D:/Synthetic/Shop', '1 hr ago', '0 shown / 18 ops', 'out of region', 'Investigation 434', 'region', 'clickable', 'Expand Investigation 434', 'button', 'collapsed', 'Star session Investigation 434', 'toggle button', 'not pressed', 'Investigation 434', 'link', 'Codex · cli', 'D:/Synthetic/Shop', '1 hr ago', '0 shown / 18 ops', 'out of region', 'Investigation 433', 'region', 'clickable', 'Expand Investigation 433', 'button', 'collapsed', 'Star session Investigation 433', 'toggle button', 'not pressed', 'Investigation 433', 'link', 'Claude Code · cli', 'D:/Synthetic/Shop', '1 hr ago', '0 shown / 18 ops', 'out of region', 'Investigation 432', 'region', 'clickable', 'Expand Investigation 432', 'button', 'collapsed', 'Star session Investigation 432', 'toggle button', 'not pressed', 'Investigation 432', 'link', 'Codex · cli', 'D:/Synthetic/Shop', '1 hr ago', '0 shown / 18 ops', 'out of region', 'Investigation 431', 'region', 'clickable', 'Expand Investigation 431', 'button', 'collapsed', 'Star session Investigation 431', 'toggle button', 'not pressed', 'Investigation 431', 'link', 'Claude Code · cli', 'D:/Synthetic/Shop', '1 hr ago', '0 shown / 18 ops', 'out of region', 'Investigation 430', 'region', 'clickable', 'Expand Investigation 430', 'button', 'collapsed', 'Star session Investigation 430', 'toggle button', 'not pressed', 'Investigation 430', 'link', 'Codex · cli', 'D:/Synthetic/Shop', '1 hr ago', '0 shown / 18 ops', 'out of region', 'Investigation 429', 'region', 'clickable', 'Expand Investigation 429', 'button', 'collapsed', 'Star session Investigation 429', 'toggle button', 'not pressed', 'Investigation 429', 'link', 'Claude Code · cli', 'D:/Synthetic/Shop', '1 hr ago', '0 shown / 18 ops', 'out of region', 'Investigation 428', 'region', 'clickable', 'Expand Investigation 428', 'button', 'collapsed', 'Star session Investigation 428', 'toggle button', 'not pressed', 'Investigation 428', 'link', 'Codex · cli', 'D:/Synthetic/Shop', '1 hr ago', '0 shown / 18 ops', 'out of region', 'Investigation 427', 'region', 'clickable', 'Expand Investigation 427', 'button', 'collapsed', 'Star session Investigation 427', 'toggle button', 'not pressed', 'Investigation 427', 'link', 'Claude Code · cli', 'D:/Synthetic/Shop', '1 hr ago', '0 shown / 18 ops', 'out of region', 'Investigation 426', 'region', 'clickable', 'Expand Investigation 426', 'button', 'collapsed', 'Star session Investigation 426', 'toggle button', 'not pressed', 'Investigation 426', 'link', 'Codex · cli', 'D:/Synthetic/Shop', '1 hr ago', '0 shown / 18 ops', 'out of region', 'Investigation 425', 'region', 'clickable', 'Expand Investigation 425', 'button', 'collapsed', 'Star session Investigation 425', 'toggle button', 'not pressed', 'Investigation 425', 'link', 'Claude Code · cli', 'D:/Synthetic/Shop', '1 hr ago', '0 shown / 18 ops', 'out of region', 'Investigation 424', 'region', 'clickable', 'Expand Investigation 424', 'button', 'collapsed', 'Star session Investigation 424', 'toggle button', 'not pressed', 'Investigation 424', 'link', 'Codex · cli', 'D:/Synthetic/Shop', '1 hr ago', '0 shown / 18 ops', 'out of region', 'Investigation 423', 'region', 'clickable', 'Expand Investigation 423', 'button', 'collapsed', 'Star session Investigation 423', 'toggle button', 'not pressed', 'Investigation 423', 'link', 'Claude Code · cli', 'D:/Synthetic/Shop', '1 hr ago', '0 shown / 18 ops', 'out of region', 'Investigation 422', 'region', 'clickable', 'Expand Investigation 422', 'button', 'collapsed', 'Star session Investigation 422', 'toggle button', 'not pressed', 'Investigation 422', 'link', 'Codex · cli', 'D:/Synthetic/Shop', '1 hr ago', '0 shown / 18 ops', 'out of region', 'Investigation 421', 'region', 'clickable', 'Expand Investigation 421', 'button', 'collapsed', 'Star session Investigation 421', 'toggle button', 'not pressed', 'Investigation 421', 'link', 'Claude Code · cli', 'D:/Synthetic/Shop', '1 hr ago', '0 shown / 18 ops', 'out of region', 'Investigation 420', 'region', 'clickable', 'Expand Investigation 420', 'button', 'collapsed', 'Star session Investigation 420', 'toggle button', 'not pressed', 'Investigation 420', 'link', 'Codex · cli', 'D:/Synthetic/Shop', '1 hr ago', '0 shown / 18 ops', 'out of region', 'Investigation 419', 'region', 'clickable', 'Expand Investigation 419', 'button', 'collapsed', 'Star session Investigation 419', 'toggle button', 'not pressed', 'Investigation 419', 'link', 'Claude Code · cli', 'D:/Synthetic/Shop', '1 hr ago', '0 shown / 18 ops', 'out of region', 'Investigation 418', 'region', 'clickable', 'Expand Investigation 418', 'button', 'collapsed', 'Star session Investigation 418', 'toggle button', 'not pressed', 'Investigation 418', 'link', 'Codex · cli', 'D:/Synthetic/Shop', '1 hr ago', '0 shown / 18 ops', 'out of region', 'Investigation 417', 'region', 'clickable', 'Expand Investigation 417', 'button', 'collapsed', 'Star session Investigation 417', 'toggle button', 'not pressed', 'Investigation 417', 'link', 'Claude Code · cli', 'D:/Synthetic/Shop', '1 hr ago', '0 shown / 18 ops', 'out of region', 'Investigation 416', 'region', 'clickable', 'Expand Investigation 416', 'button', 'collapsed', 'Star session Investigation 416', 'toggle button', 'not pressed', 'Investigation 416', 'link', 'Codex · cli', 'D:/Synthetic/Shop', '1 hr ago', '0 shown / 18 ops', 'out of region', 'Investigation 415', 'region', 'clickable', 'Expand Investigation 415', 'button', 'collapsed', 'Star session Investigation 415', 'toggle button', 'not pressed', 'Investigation 415', 'link', 'Claude Code · cli', 'D:/Synthetic/Shop', '1 hr ago', '0 shown / 18 ops', 'out of region', 'Investigation 414', 'region', 'clickable', 'Expand Investigation 414', 'button', 'collapsed', 'Star session Investigation 414', 'toggle button', 'not pressed', 'Investigation 414', 'link', 'Codex · cli', 'D:/Synthetic/Shop', '1 hr ago', '0 shown / 18 ops', 'out of region', 'Investigation 413', 'region', 'clickable', 'Expand Investigation 413', 'button', 'collapsed', 'Star session Investigation 413', 'toggle button', 'not pressed', 'Investigation 413', 'link', 'Claude Code · cli', 'D:/Synthetic/Shop', '1 hr ago', '0 shown / 18 ops', 'out of region', 'Investigation 412', 'region', 'clickable', 'Expand Investigation 412', 'button', 'collapsed', 'Star session Investigation 412', 'toggle button', 'not pressed', 'Investigation 412', 'link', 'Codex · cli', 'D:/Synthetic/Shop', '1 hr ago', '0 shown / 18 ops', 'out of region', 'Investigation 411', 'region', 'clickable', 'Expand Investigation 411', 'button', 'collapsed', 'Star session Investigation 411', 'toggle button', 'not pressed', 'Investigation 411', 'link', 'Claude Code · cli', 'D:/Synthetic/Shop', '1 hr ago', '0 shown / 18 ops', 'out of region', 'Investigation 410', 'region', 'clickable', 'Expand Investigation 410', 'button', 'collapsed', 'Star session Investigation 410', 'toggle button', 'not pressed', 'Investigation 410', 'link', 'Codex · cli', 'D:/Synthetic/Shop', '1 hr ago', '0 shown / 18 ops', 'out of region', 'Investigation 409', 'region', 'clickable', 'Expand Investigation 409', 'button', 'collapsed', 'Star session Investigation 409', 'toggle button', 'not pressed', 'Investigation 409', 'link', 'Claude Code · cli', 'D:/Synthetic/Shop', '1 hr ago', '0 shown / 18 ops', 'out of region', 'Investigation 408', 'region', 'clickable', 'Expand Investigation 408', 'button', 'collapsed', 'Star session Investigation 408', 'toggle button', 'not pressed', 'Investigation 408', 'link', 'Codex · cli', 'D:/Synthetic/Shop', '1 hr ago', '0 shown / 18 ops', 'out of region', 'Investigation 407', 'region', 'clickable', 'Expand Investigation 407', 'button', 'collapsed', 'Star session Investigation 407', 'toggle button', 'not pressed', 'Investigation 407', 'link', 'Claude Code · cli', 'D:/Synthetic/Shop', '1 hr ago', '0 shown / 18 ops', 'out of region', 'Investigation 406', 'region', 'clickable', 'Expand Investigation 406', 'button', 'collapsed', 'Star session Investigation 406', 'toggle button', 'not pressed', 'Investigation 406', 'link', 'Codex · cli', 'D:/Synthetic/Shop', '1 hr ago', '0 shown / 18 ops', 'out of region', 'Investigation 405', 'region', 'clickable', 'Expand Investigation 405', 'button', 'collapsed', 'Star session Investigation 405', 'toggle button', 'not pressed', 'Investigation 405', 'link', 'Claude Code · cli', 'D:/Synthetic/Shop', '1 hr ago', '0 shown / 18 ops', 'out of region', 'Investigation 404', 'region', 'clickable', 'Expand Investigation 404', 'button', 'collapsed', 'Star session Investigation 404', 'toggle button', 'not pressed', 'Investigation 404', 'link', 'Codex · cli', 'D:/Synthetic/Shop', '1 hr ago', '0 shown / 18 ops', 'out of region', 'Investigation 403', 'region', 'clickable', 'Expand Investigation 403', 'button', 'collapsed', 'Star session Investigation 403', 'toggle button', 'not pressed', 'Investigation 403', 'link', 'Claude Code · cli', 'D:/Synthetic/Shop', '1 hr ago', '0 shown / 18 ops', 'out of region', 'Investigation 402', 'region', 'clickable', 'Expand Investigation 402', 'button', 'collapsed', 'Star session Investigation 402', 'toggle button', 'not pressed', 'Investigation 402', 'link', 'Codex · cli', 'D:/Synthetic/Shop', '1 hr ago', '0 shown / 18 ops', 'out of region', 'Investigation 401', 'region', 'clickable', 'Expand Investigation 401', 'button', 'collapsed', 'Star session Investigation 401', 'toggle button', 'not pressed', 'Investigation 401', 'link', 'Claude Code · cli', 'D:/Synthetic/Shop', '1 hr ago', '0 shown / 18 ops', 'out of region', 'Orders: optimization across 50 versions', 'region', 'clickable', 'Expand Orders: optimization across 50 versions', 'button', 'collapsed', 'Unstar session Orders: optimization across 50 versions', 'toggle button', 'pressed', 'Orders: optimization across 50 versions', 'link', 'Claude Code · cli', 'D:/Synthetic/Shop', '1 hr ago', 'clickable', 'orders −92%', '50 shown / 1000 ops', 'out of region', '9950', 'link', '15:39', 'QueryClaude Code', 'SELECT @CustomerId AS CustomerId; -- version 0', 'succeeded', '12 ms—', '9949', 'link', '15:39', 'QueryCodex', 'SELECT @CustomerId AS CustomerId; -- version 0', 'succeeded', '12 ms—', '9948', 'link', '15:39', 'QueryClaude Code', 'SELECT @CustomerId AS CustomerId; -- version 0', 'succeeded', '12 ms—', '9947', 'link', '15:39', 'QueryCodex', 'SELECT @CustomerId AS CustomerId; -- version 0', 'succeeded', '12 ms—', '9946', 'link', '15:39', 'QueryClaude Code', 'SELECT @CustomerId AS CustomerId; -- version 0', 'succeeded', '12 ms—', '9945', 'link', '15:39', 'QueryCodex', 'SELECT @CustomerId AS CustomerId; -- version 0', 'succeeded', '12 ms—', '9944', 'link', '15:39', 'QueryClaude Code', 'SELECT @CustomerId AS CustomerId; -- version 0', 'succeeded', '12 ms—', '9943', 'link', '15:39', 'QueryCodex', 'SELECT @CustomerId AS CustomerId; -- version 0', 'succeeded', '12 ms—', '9942', 'link', '15:39', 'QueryClaude Code', 'SELECT @CustomerId AS CustomerId; -- version 0', 'succeeded', '12 ms—', '9941', 'link', '15:39', 'QueryCodex', 'SELECT @CustomerId AS CustomerId; -- version 0', 'succeeded', '12 ms—', '9940', 'link', '15:39', 'QueryClaude Code', 'SELECT @CustomerId AS CustomerId; -- version 0', 'succeeded', '12 ms—', '9939', 'link', '15:39', 'QueryCodex', 'SELECT @CustomerId AS CustomerId; -- version 0', 'succeeded', '12 ms—', '9938', 'link', '15:39', 'QueryClaude Code', 'SELECT @CustomerId AS CustomerId; -- version 0', 'succeeded', '12 ms—', '9937', 'link', '15:38', 'QueryCodex', 'SELECT @CustomerId AS CustomerId; -- version 0', 'succeeded', '12 ms—', '9936', 'link', '15:38', 'QueryClaude Code', 'SELECT @CustomerId AS CustomerId; -- version 0', 'succeeded', '12 ms—', '9935', 'link', '15:38', 'QueryCodex', 'SELECT @CustomerId AS CustomerId; -- version 0', 'succeeded', '12 ms—', '9934', 'link', '15:38', 'QueryClaude Code', 'SELECT @CustomerId AS CustomerId; -- version 0', 'succeeded', '12 ms—', '9933', 'link', '15:38', 'QueryCodex', 'SELECT @CustomerId AS CustomerId; -- version 0', 'succeeded', '12 ms—']"
+      ],
+      "rawBytes": 49462
+    },
+    {
+      "name": "next Tab leaves main via dashboard control",
+      "active": {
+        "tag": "INPUT",
+        "role": null,
+        "name": "Search activity",
+        "text": ""
+      },
+      "speech": [
+        "Speaking [LangChangeCommand ('en'), 'Activity feed', 'region', CancellableSpeech (still valid)]",
+        "Speaking [LangChangeCommand ('en'), 'Search activity', 'edit', CancellableSpeech (still valid), 'Search label, session, target', CancellableSpeech (still valid), 'blank']"
+      ],
+      "rawBytes": 1134
+    },
+    {
+      "name": "baseline A radio name",
+      "active": {
+        "tag": "INPUT",
+        "role": null,
+        "name": "A v48",
+        "text": ""
+      },
+      "speech": [
+        "Speaking [LangChangeCommand ('en'), 'main landmark', CancellableSpeech (still valid)]",
+        "Speaking [LangChangeCommand ('en'), 'A v48', 'v48 Kept by agent Version 49 Version 48', 'row 50', 'Baseline A', 'column 12', CancellableSpeech (still valid)]",
+        "Speaking [LangChangeCommand ('en'), 'A v48', 'radio button', 'checked', 'Baseline A', '49 of 50', CancellableSpeech (still valid)]"
+      ],
+      "rawBytes": 1308
+    },
+    {
+      "name": "candidate B radio name",
+      "active": {
+        "tag": "INPUT",
+        "role": null,
+        "name": "B v49",
+        "text": ""
+      },
+      "speech": [
+        "Speaking [LangChangeCommand ('en'), 'B v49', 'v49 Kept by agent Version 49', 'row 51', 'Candidate B', 'column 13', CancellableSpeech (still valid)]",
+        "Speaking [LangChangeCommand ('en'), 'B v49', 'radio button', 'checked', 'Candidate B', '50 of 50', CancellableSpeech (still valid)]"
+      ],
+      "rawBytes": 408
+    },
+    {
+      "name": "B radio keyboard change",
+      "active": {
+        "tag": "INPUT",
+        "role": null,
+        "name": "B v48",
+        "text": ""
+      },
+      "speech": [
+        "Speaking [LangChangeCommand ('en'), 'B v48', 'v48 Kept by agent Version 49 Version 48', 'row 50', CancellableSpeech (still valid)]",
+        "Speaking [LangChangeCommand ('en'), 'B v48', 'radio button', 'checked', 'Candidate B', '49 of 50', CancellableSpeech (still valid)]"
+      ],
+      "rawBytes": 618
+    },
+    {
+      "name": "comparison case options",
+      "active": {
+        "tag": "SPAN",
+        "role": "radio",
+        "name": null,
+        "text": ""
+      },
+      "speech": [
+        "Speaking [LangChangeCommand ('en'), 'clickable', 'main landmark', 'Optimization', 'region', 'current', 'All cases · Sum', 'button', 'collapsed', 'opens dialog']"
+      ],
+      "rawBytes": 1988
+    },
+    {
+      "name": "selected case radio",
+      "active": {
+        "tag": "BUTTON",
+        "role": null,
+        "name": null,
+        "text": "@CustomerId = 2 · Sum"
+      },
+      "speech": [
+        "Speaking [LangChangeCommand ('en'), '@CustomerId = 2', 'radio button', 'not checked', '13 of 21', CancellableSpeech (still valid)]",
+        "Speaking [LangChangeCommand ('en'), 'button', 'collapsed', 'opens dialog', '@CustomerId = 2 · Sum']",
+        "Speaking [LangChangeCommand ('en'), '@CustomerId = 2 · Sum', 'button', 'collapsed', 'opens dialog']"
+      ],
+      "rawBytes": 936
+    },
+    {
+      "name": "case outcome dialog open",
+      "active": {
+        "tag": "BUTTON",
+        "role": null,
+        "name": null,
+        "text": "Close"
+      },
+      "speech": [
+        "Speaking [LangChangeCommand ('en'), 'Case outcomes', 'dialog', 'Results, observed IO and recorded policy are independent. ↑ means fewer reads; policy uses the original recorded direction.', CancellableSpeech (still valid)]",
+        "Speaking [LangChangeCommand ('en'), 'Case outcomes', 'dialog', 'Results, observed IO and recorded policy are independent. ↑ means fewer reads; policy uses the original recorded direction.', CancellableSpeech (still valid)]"
+      ],
+      "rawBytes": 1402
+    },
+    {
+      "name": "case outcome dialog first Tab",
+      "active": {
+        "tag": "BUTTON",
+        "role": null,
+        "name": null,
+        "text": "Close"
+      },
+      "speech": [],
+      "rawBytes": 214
+    },
+    {
+      "name": "read case table and recorded failure",
+      "active": {
+        "tag": "BUTTON",
+        "role": null,
+        "name": null,
+        "text": "Close"
+      },
+      "speech": [
+        "Speaking [LangChangeCommand ('en'), 'row 2', 'Case', 'column 1', '@CustomerId = 1']"
+      ],
+      "rawBytes": 4622
+    },
+    {
+      "name": "case outcome Escape returns focus",
+      "active": {
+        "tag": "BUTTON",
+        "role": null,
+        "name": "Policy: 19 pass, 1 fail, 0 unavailable",
+        "text": "Policy ✓19 · ⚠1"
+      },
+      "speech": [],
+      "rawBytes": 220
+    },
+    {
+      "name": "SQL read-only editor focused",
+      "active": {
+        "tag": "TEXTAREA",
+        "role": "textbox",
+        "name": "Baseline SQL",
+        "text": ""
+      },
+      "speech": [
+        "Speaking [LangChangeCommand ('en'), 'main landmark', CancellableSpeech (still valid)]",
+        "Speaking [LangChangeCommand ('en'), 'Baseline SQL', 'editor', 'read only', 'multi line', CancellableSpeech (still valid), 'SELECT @CustomerId AS CustomerId; -- version 48']"
+      ],
+      "rawBytes": 1028
+    },
+    {
+      "name": "read SQL first line",
+      "active": {
+        "tag": "TEXTAREA",
+        "role": "textbox",
+        "name": "Baseline SQL",
+        "text": ""
+      },
+      "speech": [
+        "Speaking [LangChangeCommand ('en'), 'SELECT @CustomerId AS CustomerId; -- version 48']"
+      ],
+      "rawBytes": 524
+    },
+    {
+      "name": "SQL Tab navigation",
+      "active": {
+        "tag": "TEXTAREA",
+        "role": "textbox",
+        "name": "Candidate SQL",
+        "text": ""
+      },
+      "speech": [
+        "Speaking [LangChangeCommand ('en'), 'Candidate SQL', 'editor', 'read only', 'multi line', CancellableSpeech (still valid), 'SELECT @CustomerId AS CustomerId; -- version 49']"
+      ],
+      "rawBytes": 452
+    },
+    {
+      "name": "SQL Shift+Tab return",
+      "active": {
+        "tag": "TEXTAREA",
+        "role": "textbox",
+        "name": "Baseline SQL",
+        "text": ""
+      },
+      "speech": [
+        "Speaking [LangChangeCommand ('en'), 'Baseline SQL', 'editor', 'read only', 'multi line', CancellableSpeech (still valid), 'SELECT @CustomerId AS CustomerId; -- version 48']"
+      ],
+      "rawBytes": 463
+    },
+    {
+      "name": "copy baseline SQL",
+      "active": {
+        "tag": "BODY",
+        "role": null,
+        "name": null,
+        "text": "\n    Skip to main contentSQLHarnessActivityUsageProfilesSettingsActivity/Orders: optimization across 50 versions/#10000orders · v48 → v49Agent keepVersion 49Own"
+      },
+      "speech": [
+        "Speaking [LangChangeCommand ('en'), 'Baseline SQL actions', 'grouping', 'Copy baseline SQL', 'button']",
+        "Speaking [LangChangeCommand ('en'), 'Copied baseline SQL ']"
+      ],
+      "rawBytes": 752
+    }
+  ],
+  "limitations": [
+    "NVDA actual speech pipeline IO logs with silence synthesizer; no audible listening, braille or blind-user study. Targeted focus setup is explicit; entire workflow is not claimed keyboard-only."
+  ],
+  "browser": "156.0.8078.4",
+  "nvdaPid": 14836,
+  "assets": [
+    {
+      "path": "/assets/index-BjVrJ4lA.js",
+      "sha256": "1a311497f0531ae3dd4120710d01428d7ec223d25c9f3689b65ad9d680a881fe"
+    },
+    {
+      "path": "/assets/index-DBQ2y8xw.css",
+      "sha256": "c966a401419a9dff037b616ccafa01aade3f6e8db5bc4ad36ec780124081cdba"
+    },
+    {
+      "path": "/assets/monaco-DjpsE8to.css",
+      "sha256": "797aa85d5570a0ebbb047093f58e9adc13945078495425b27133073e5b15a9da"
+    }
+  ],
+  "finishedAt": "2026-11-11T16:31:18.676Z"
+}

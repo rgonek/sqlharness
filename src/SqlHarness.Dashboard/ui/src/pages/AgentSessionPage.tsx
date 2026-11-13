@@ -37,10 +37,10 @@ export function AgentSessionPage() {
 
   if (settings.data && !settings.data.settings.dashboard.agentTranscripts.enabled)
     return <p role="status">Transcript matching is off. Returning to MCP/CLI sessions…</p>
-  if (settings.error) return <ErrorState error={settings.error} />
-  if (detail.error) return <ErrorState error={detail.error instanceof NotFoundError ? detail.error : detail.error} />
+  if (settings.error) return <ErrorState error={settings.error} onRetry={() => void settings.refetch()} retrying={settings.isFetching} />
+  if (detail.error) return <ErrorState error={detail.error instanceof NotFoundError ? detail.error : detail.error} onRetry={() => void detail.refetch()} retrying={detail.isFetching} />
   if (detail.isPending || settings.isPending || operationPages.isPending) return <Skeleton className="h-64 w-full" />
-  if (operationPages.error && !operationPages.data) return <ErrorState error={operationPages.error} />
+  if (operationPages.error && !operationPages.data) return <ErrorState error={operationPages.error} onRetry={() => void operationPages.refetch()} retrying={operationPages.isFetching} />
 
   const { agentSession } = detail.data
   const operations = operationPages.data?.pages.flatMap(page => page.items) ?? []
@@ -56,7 +56,7 @@ export function AgentSessionPage() {
             : <><Input aria-label="Agent session title" maxLength={200} value={titleDraft} onChange={event => setTitleDraft(event.target.value)} />
               <Button size="sm" disabled={update.isPending} onClick={() => update.mutate({ title: titleDraft.trim() || null }, { onSuccess: () => setTitleDraft(null) })}>Save title</Button>
               <Button size="sm" variant="ghost" onClick={() => setTitleDraft(null)}>Cancel</Button></>}
-          <Button size="icon" variant="ghost" aria-label={agentSession.starred ? "Unstar" : "Star"} aria-pressed={agentSession.starred} onClick={() => update.mutate({ starred: !agentSession.starred })}><HugeiconsIcon icon={StarIcon} strokeWidth={2} className={agentSession.starred ? "fill-amber-400 text-amber-500" : ""} /></Button>
+          <Button size="icon" variant="ghost" aria-label={agentSession.starred ? "Unstar" : "Star"} aria-pressed={agentSession.starred} onClick={() => update.mutate({ starred: !agentSession.starred })}><HugeiconsIcon icon={StarIcon} strokeWidth={2} className={agentSession.starred ? "fill-current text-star" : ""} /></Button>
           <Button size="icon" variant="ghost" aria-label={agentSession.archived ? "Unarchive" : "Archive"} onClick={() => update.mutate({ archived: !agentSession.archived })}>{agentSession.archived ? <HugeiconsIcon icon={ArchiveRestoreIcon} strokeWidth={2} /> : <HugeiconsIcon icon={Archive02Icon} strokeWidth={2} />}</Button>
         </div></CardTitle>
         <CardDescription>{kind} agent session · {id}</CardDescription>

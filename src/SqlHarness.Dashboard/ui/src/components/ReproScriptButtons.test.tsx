@@ -36,3 +36,16 @@ test("warns when values are missing and disables unavailable scripts with the AP
   expect(screen.getAllByRole("button")[1]).toHaveAttribute("title", "Script not available for this engine")
   fetchMock.mockRestore()
 })
+
+test("named reproduction action offers exact returned text for manual copy when the clipboard is denied", async () => {
+  Object.defineProperty(navigator, "clipboard", { configurable: true, value: { writeText: vi.fn().mockRejectedValue(new Error("denied")) } })
+  const fetchMock = vi.spyOn(globalThis, "fetch").mockImplementation(async () => new Response(JSON.stringify({ text: "SELECT @p; -- candidate case/2", completeness: "Complete", label: "As executed" }), { status: 200 }))
+  render(<QueryClientProvider client={new QueryClient({ defaultOptions: { queries: { retry: false } } })}>
+    <ReproScriptButtons operationId={10} side="candidate" caseId="case/2" labelPrefix="candidate case/2" />
+  </QueryClientProvider>)
+  const action = await screen.findByRole("button", { name: "Copy candidate case/2 script (as executed)" })
+  await waitFor(() => expect(action).toBeEnabled())
+  await userEvent.click(action)
+  expect(await screen.findByRole("textbox", { name: "Text to copy" })).toHaveValue("SELECT @p; -- candidate case/2")
+  expect(fetchMock).toHaveBeenCalledWith("/api/operations/10/repro?side=candidate&case=case%2F2&form=as-executed", expect.any(Object))
+})

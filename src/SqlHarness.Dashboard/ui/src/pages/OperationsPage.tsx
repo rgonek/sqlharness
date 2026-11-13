@@ -26,7 +26,7 @@ export function OperationsPage() {
 
   const filters = { from: search.from, to: search.to, profile: search.profile, unprofiled: search.unprofiled, dimensions }
   const query = useOperations(filters)
-  if (query.error) return <ErrorState error={query.error} />
+  if (query.error) return <ErrorState error={query.error} onRetry={() => void query.refetch()} retrying={query.isFetching} />
 
   const operations = query.data?.pages.flatMap(page => page.items) ?? []
   return <div className="space-y-4">

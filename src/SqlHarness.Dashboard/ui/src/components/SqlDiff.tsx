@@ -1,4 +1,4 @@
-import { useId, useState } from "react"
+import { useId, useState, type ReactNode } from "react"
 import { CopyButton } from "@/components/CopyButton"
 import { LazySqlMergeView, LazySqlViewer, loadUnifiedDiffText } from "@/components/SqlEditors"
 import { Checkbox } from "@/components/ui/checkbox"
@@ -30,14 +30,21 @@ export function DiffControls({ mode, onModeChange, ignoreFormatting, onIgnoreFor
   </div>
 }
 
-function SideContent({ label, sql, engine }: { label: "baseline" | "candidate"; sql: string; engine: string | null }) {
+function SideActions({ label, sql, children }: { label: "baseline" | "candidate"; sql: string; children?: ReactNode }) {
+  return <div role="group" aria-label={`${label === "baseline" ? "Baseline" : "Candidate"} SQL actions`} className="flex min-w-0 flex-wrap items-center gap-2">
+    <CopyButton label={`Copy ${label} SQL`} scopeKey={sql} showLabel getText={() => sql} />
+    {children}
+  </div>
+}
+
+function SideContent({ label, sql, engine, actions }: { label: "baseline" | "candidate"; sql: string; engine: string | null; actions?: ReactNode }) {
   return <div className="space-y-2">
-    <div className="flex items-center justify-between">
+    <div className="flex flex-wrap items-center justify-between gap-2">
       <h3 className="font-medium">{label === "baseline" ? "Baseline SQL" : "Candidate SQL"}</h3>
-      <CopyButton label={`Copy ${label} SQL`} getText={() => sql} />
+      <SideActions label={label} sql={sql}>{actions}</SideActions>
     </div>
     {utf8BytesWithin(sql, MAX_DIFF_BYTES) === null
-      ? <pre className="max-h-[32rem] overflow-auto whitespace-pre-wrap break-words rounded border p-3 font-mono text-xs">{boundedPreview(sql)}</pre>
+      ? <pre className="max-h-[32rem] overflow-auto whitespace-pre-wrap break-words rounded border p-3 font-mono text-sm">{boundedPreview(sql)}</pre>
       : <LazySqlViewer sql={sql} dialect={dialectOf(engine)} />}
   </div>
 }
@@ -46,13 +53,16 @@ function TooLargeMessage({ baseline, candidate }: { baseline: string; candidate:
   return <div className="space-y-3">
     <p className="text-sm text-muted-foreground">Diff unavailable: SQL exceeds the 256 KiB or 4,000 line limit.</p>
     <div className="grid gap-3 md:grid-cols-2">
-      <section aria-label="Baseline bounded SQL preview"><h3 className="font-medium">Baseline preview</h3><pre className="max-h-64 overflow-auto whitespace-pre-wrap break-words rounded border p-3 font-mono text-xs">{boundedPreview(baseline)}</pre></section>
-      <section aria-label="Candidate bounded SQL preview"><h3 className="font-medium">Candidate preview</h3><pre className="max-h-64 overflow-auto whitespace-pre-wrap break-words rounded border p-3 font-mono text-xs">{boundedPreview(candidate)}</pre></section>
+      <section aria-label="Baseline bounded SQL preview"><h3 className="font-medium">Baseline preview</h3><pre className="max-h-64 overflow-auto whitespace-pre-wrap break-words rounded border p-3 font-mono text-sm">{boundedPreview(baseline)}</pre></section>
+      <section aria-label="Candidate bounded SQL preview"><h3 className="font-medium">Candidate preview</h3><pre className="max-h-64 overflow-auto whitespace-pre-wrap break-words rounded border p-3 font-mono text-sm">{boundedPreview(candidate)}</pre></section>
     </div>
   </div>
 }
 
-export function SqlDiff({ baseline, candidate, engine, embedded = false }: { baseline: string | null; candidate: string | null; engine: string | null; embedded?: boolean }) {
+export function SqlDiff({ baseline, candidate, engine, embedded = false, baselineActions, candidateActions }: {
+  baseline: string | null; candidate: string | null; engine: string | null; embedded?: boolean
+  baselineActions?: ReactNode; candidateActions?: ReactNode
+}) {
   const hasBaseline = baseline !== null
   const hasCandidate = candidate !== null
   const hasBoth = hasBaseline && hasCandidate
@@ -101,7 +111,10 @@ export function SqlDiff({ baseline, candidate, engine, embedded = false }: { bas
     return unifiedDiffText(normalizedBaseline, normalizedCandidate)
   }
 
-  const copySides = embedded && hasBoth ? <span className="inline-flex"><CopyButton label="Copy baseline SQL" getText={() => baseline} /><CopyButton label="Copy candidate SQL" getText={() => candidate} /></span> : null
+  const copySides = embedded && hasBoth ? <div className="flex min-w-0 flex-wrap gap-3">
+    <SideActions label="baseline" sql={baseline}>{baselineActions}</SideActions>
+    <SideActions label="candidate" sql={candidate}>{candidateActions}</SideActions>
+  </div> : null
 
   return <div className="sql-diff space-y-4">
     {!hasBoth && <p className="text-sm text-muted-foreground">SQL text is not stored for both sides (journal.storeSensitive is off or historical text is unavailable).</p>}
@@ -111,13 +124,13 @@ export function SqlDiff({ baseline, candidate, engine, embedded = false }: { bas
         {hasCandidate && <TabsTrigger value="candidate">Candidate</TabsTrigger>}
         {hasBoth && <TabsTrigger value="diff">Diff</TabsTrigger>}
       </TabsList>}
-      {hasBaseline && <TabsContent value="baseline"><SideContent label="baseline" sql={baseline} engine={engine} /></TabsContent>}
-      {hasCandidate && <TabsContent value="candidate"><SideContent label="candidate" sql={candidate} engine={engine} /></TabsContent>}
+      {hasBaseline && <TabsContent value="baseline"><SideContent label="baseline" sql={baseline} engine={engine} actions={baselineActions} /></TabsContent>}
+      {hasCandidate && <TabsContent value="candidate"><SideContent label="candidate" sql={candidate} engine={engine} actions={candidateActions} /></TabsContent>}
       {hasBoth && <TabsContent value="diff" className="space-y-3">{diffUnavailable && copySides}
         {tooLargeRaw ? <TooLargeMessage baseline={baseline} candidate={candidate} /> : tooLargeNormalized ? <TooLargeMessage baseline={baseline} candidate={candidate} /> : <>
           <div className="flex flex-wrap items-center gap-3">
             <DiffControls mode={mode} onModeChange={changeMode} ignoreFormatting={ignoreFormatting} onIgnoreFormattingChange={changeIgnoreFormatting} />
-            <span className="inline-flex">{copySides}<CopyButton label="Copy diff" getText={getDiffText} /></span>
+            {copySides}<CopyButton label="Copy diff" scopeKey={`${normalizedBaseline}\0${normalizedCandidate}`} showLabel getText={getDiffText} />
           </div>
           {formatFailed && <p className="text-sm text-muted-foreground">Formatting failed; showing the SQL as written.</p>}
           <LazySqlMergeView baseline={normalizedBaseline!} candidate={normalizedCandidate!} dialect={dialectOf(engine)} mode={mode} />

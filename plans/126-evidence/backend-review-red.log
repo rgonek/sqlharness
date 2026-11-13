@@ -1,0 +1,95 @@
+  SqlHarness.Core -> C:\Users\rgone\MultiCliProfiles\codex\account-b\worktrees\8723\sqlharness\src\SqlHarness.Core\bin\Debug\net10.0\SqlHarness.Core.dll
+  SqlHarness.Mcp -> C:\Users\rgone\MultiCliProfiles\codex\account-b\worktrees\8723\sqlharness\src\SqlHarness.Mcp\bin\Debug\net10.0\SqlHarness.Mcp.dll
+  SqlHarness.Dashboard -> C:\Users\rgone\MultiCliProfiles\codex\account-b\worktrees\8723\sqlharness\src\SqlHarness.Dashboard\bin\Debug\net10.0\SqlHarness.Dashboard.dll
+  SqlHarness.Cli -> C:\Users\rgone\MultiCliProfiles\codex\account-b\worktrees\8723\sqlharness\src\SqlHarness.Cli\bin\Debug\net10.0\sqlharness.dll
+  SqlHarness.Tests -> C:\Users\rgone\MultiCliProfiles\codex\account-b\worktrees\8723\sqlharness\tests\SqlHarness.Tests\bin\Debug\net10.0\SqlHarness.Tests.dll
+Test run for C:\Users\rgone\MultiCliProfiles\codex\account-b\worktrees\8723\sqlharness\tests\SqlHarness.Tests\bin\Debug\net10.0\SqlHarness.Tests.dll (.NETCoreApp,Version=v10.0)
+A total of 1 test files matched the specified pattern.
+[xUnit.net 00:00:05.26]     SqlHarness.Tests.Dashboard.OptimizationComparerTests.Colliding_case_fingerprints_never_select_last_metrics_or_drop_script_cases(independent: False, selection: "all") [FAIL]
+[xUnit.net 00:00:05.30]     SqlHarness.Tests.Dashboard.OptimizationComparerTests.Colliding_case_fingerprints_never_select_last_metrics_or_drop_script_cases(independent: True, selection: "repeat") [FAIL]
+[xUnit.net 00:00:05.30]     SqlHarness.Tests.Dashboard.OptimizationComparerTests.Colliding_case_fingerprints_never_select_last_metrics_or_drop_script_cases(independent: False, selection: "repeat") [FAIL]
+[xUnit.net 00:00:05.31]     SqlHarness.Tests.Dashboard.OptimizationComparerTests.Colliding_case_fingerprints_never_select_last_metrics_or_drop_script_cases(independent: True, selection: "all") [FAIL]
+[xUnit.net 00:00:05.31]     SqlHarness.Tests.Dashboard.OptimizationComparerTests.Unique_case_remains_selectable_beside_an_ambiguous_case_identity(independent: False) [FAIL]
+[xUnit.net 00:00:05.31]     SqlHarness.Tests.Dashboard.OptimizationComparerTests.Unique_case_remains_selectable_beside_an_ambiguous_case_identity(independent: True) [FAIL]
+[xUnit.net 00:00:05.32]     SqlHarness.Tests.Dashboard.OptimizationComparerTests.Duplicate_case_metric_rows_do_not_choose_an_arbitrary_representative_in_any_projection [FAIL]
+  Failed SqlHarness.Tests.Dashboard.OptimizationComparerTests.Colliding_case_fingerprints_never_select_last_metrics_or_drop_script_cases(independent: False, selection: "all") [612 ms]
+  Error Message:
+   Assert.Null() Failure: Value of type 'Nullable<long>' has a value
+Expected: null
+Actual:   500
+  Stack Trace:
+     at SqlHarness.Tests.Dashboard.OptimizationComparerTests.Colliding_case_fingerprints_never_select_last_metrics_or_drop_script_cases(Boolean independent, String selection) in C:\Users\rgone\MultiCliProfiles\codex\account-b\worktrees\8723\sqlharness\tests\SqlHarness.Tests\Dashboard\OptimizationComparerTests.cs:line 22
+   at System.Reflection.MethodBaseInvoker.InterpretedInvoke_Method(Object obj, IntPtr* args)
+   at System.Reflection.MethodBaseInvoker.InvokeDirectByRefWithFewArgs(Object obj, Span`1 copyOfArgs, BindingFlags invokeAttr)
+  Failed SqlHarness.Tests.Dashboard.OptimizationComparerTests.Colliding_case_fingerprints_never_select_last_metrics_or_drop_script_cases(independent: True, selection: "repeat") [17 ms]
+  Error Message:
+   Assert.Null() Failure: Value of type 'Nullable<long>' has a value
+Expected: null
+Actual:   500
+  Stack Trace:
+     at SqlHarness.Tests.Dashboard.OptimizationComparerTests.Colliding_case_fingerprints_never_select_last_metrics_or_drop_script_cases(Boolean independent, String selection) in C:\Users\rgone\MultiCliProfiles\codex\account-b\worktrees\8723\sqlharness\tests\SqlHarness.Tests\Dashboard\OptimizationComparerTests.cs:line 22
+   at InvokeStub_OptimizationComparerTests.Colliding_case_fingerprints_never_select_last_metrics_or_drop_script_cases(Object, Span`1)
+   at System.Reflection.MethodBaseInvoker.InvokeWithFewArgs(Object obj, BindingFlags invokeAttr, Binder binder, Object[] parameters, CultureInfo culture)
+  Failed SqlHarness.Tests.Dashboard.OptimizationComparerTests.Colliding_case_fingerprints_never_select_last_metrics_or_drop_script_cases(independent: False, selection: "repeat") [1 ms]
+  Error Message:
+   Assert.Null() Failure: Value of type 'Nullable<long>' has a value
+Expected: null
+Actual:   500
+  Stack Trace:
+     at SqlHarness.Tests.Dashboard.OptimizationComparerTests.Colliding_case_fingerprints_never_select_last_metrics_or_drop_script_cases(Boolean independent, String selection) in C:\Users\rgone\MultiCliProfiles\codex\account-b\worktrees\8723\sqlharness\tests\SqlHarness.Tests\Dashboard\OptimizationComparerTests.cs:line 22
+   at InvokeStub_OptimizationComparerTests.Colliding_case_fingerprints_never_select_last_metrics_or_drop_script_cases(Object, Span`1)
+   at System.Reflection.MethodBaseInvoker.InvokeWithFewArgs(Object obj, BindingFlags invokeAttr, Binder binder, Object[] parameters, CultureInfo culture)
+  Failed SqlHarness.Tests.Dashboard.OptimizationComparerTests.Colliding_case_fingerprints_never_select_last_metrics_or_drop_script_cases(independent: True, selection: "all") [1 ms]
+  Error Message:
+   Assert.Null() Failure: Value of type 'Nullable<long>' has a value
+Expected: null
+Actual:   500
+  Stack Trace:
+     at SqlHarness.Tests.Dashboard.OptimizationComparerTests.Colliding_case_fingerprints_never_select_last_metrics_or_drop_script_cases(Boolean independent, String selection) in C:\Users\rgone\MultiCliProfiles\codex\account-b\worktrees\8723\sqlharness\tests\SqlHarness.Tests\Dashboard\OptimizationComparerTests.cs:line 22
+   at InvokeStub_OptimizationComparerTests.Colliding_case_fingerprints_never_select_last_metrics_or_drop_script_cases(Object, Span`1)
+   at System.Reflection.MethodBaseInvoker.InvokeWithFewArgs(Object obj, BindingFlags invokeAttr, Binder binder, Object[] parameters, CultureInfo culture)
+  Failed SqlHarness.Tests.Dashboard.OptimizationComparerTests.Unique_case_remains_selectable_beside_an_ambiguous_case_identity(independent: False) [27 ms]
+  Error Message:
+   Assert.Contains() Failure: Sub-string not found
+String:    ""
+Not found: "1 of 3"
+  Stack Trace:
+     at SqlHarness.Tests.Dashboard.OptimizationComparerTests.Unique_case_remains_selectable_beside_an_ambiguous_case_identity(Boolean independent) in C:\Users\rgone\MultiCliProfiles\codex\account-b\worktrees\8723\sqlharness\tests\SqlHarness.Tests\Dashboard\OptimizationComparerTests.cs:line 67
+   at System.Reflection.MethodBaseInvoker.InterpretedInvoke_Method(Object obj, IntPtr* args)
+   at System.Reflection.MethodBaseInvoker.InvokeDirectByRefWithFewArgs(Object obj, Span`1 copyOfArgs, BindingFlags invokeAttr)
+  Failed SqlHarness.Tests.Dashboard.OptimizationComparerTests.Unique_case_remains_selectable_beside_an_ambiguous_case_identity(independent: True) [1 ms]
+  Error Message:
+   Assert.Contains() Failure: Sub-string not found
+String:    ""
+Not found: "1 of 3"
+  Stack Trace:
+     at SqlHarness.Tests.Dashboard.OptimizationComparerTests.Unique_case_remains_selectable_beside_an_ambiguous_case_identity(Boolean independent) in C:\Users\rgone\MultiCliProfiles\codex\account-b\worktrees\8723\sqlharness\tests\SqlHarness.Tests\Dashboard\OptimizationComparerTests.cs:line 67
+   at InvokeStub_OptimizationComparerTests.Unique_case_remains_selectable_beside_an_ambiguous_case_identity(Object, Span`1)
+   at System.Reflection.MethodBaseInvoker.InvokeWithOneArg(Object obj, BindingFlags invokeAttr, Binder binder, Object[] parameters, CultureInfo culture)
+  Failed SqlHarness.Tests.Dashboard.OptimizationComparerTests.Duplicate_case_metric_rows_do_not_choose_an_arbitrary_representative_in_any_projection [19 ms]
+  Error Message:
+   Assert.All() Failure: 2 out of 2 items in the collection did not pass.
+[0]: Item:  VersionRow { Version = v0, Hash = h0, LogicalReadsSum = 500, LogicalReadsMean = 500, ScansSum = 1, ElapsedMedianMs = 500, CaseOutcome = 1/1 ok, MeasuredIn = System.Int64[], LatestOperationId = 1, VerdictBasis = whole batch, RowsReturnedSum = , RowsReturnedVaries = False, CpuMedianMs = , MetricCases = SqlHarness.Dashboard.VersionCaseMetric[], Outcomes = OutcomeCounts { ResultsEquivalent = 1, ResultsDifferent = 0, ResultsUnavailable = 0, IoBetter = 0, IoSame = 0, IoWorse = 0, IoUnavailable = 1, PolicyPass = 0, PolicyFail = 0, PolicyUnavailable = 1 }, CaseOutcomes = SqlHarness.Dashboard.CaseOutcomeDetail[] }
+     Error: Assert.Null() Failure: Value of type 'Nullable<double>' has a value
+            Expected: null
+            Actual:   500
+[1]: Item:  VersionRow { Version = v1, Hash = h1, LogicalReadsSum = 50, LogicalReadsMean = 50, ScansSum = 1, ElapsedMedianMs = 50, CaseOutcome = 1 better, MeasuredIn = System.Int64[], LatestOperationId = 1, VerdictBasis = whole batch, RowsReturnedSum = , RowsReturnedVaries = False, CpuMedianMs = , MetricCases = SqlHarness.Dashboard.VersionCaseMetric[], Outcomes = OutcomeCounts { ResultsEquivalent = 1, ResultsDifferent = 0, ResultsUnavailable = 0, IoBetter = 1, IoSame = 0, IoWorse = 0, IoUnavailable = 0, PolicyPass = 0, PolicyFail = 0, PolicyUnavailable = 1 }, CaseOutcomes = SqlHarness.Dashboard.CaseOutcomeDetail[] }
+     Error: Assert.Null() Failure: Value of type 'Nullable<double>' has a value
+            Expected: null
+            Actual:   50
+  Stack Trace:
+     at SqlHarness.Tests.Dashboard.OptimizationComparerTests.Duplicate_case_metric_rows_do_not_choose_an_arbitrary_representative_in_any_projection() in C:\Users\rgone\MultiCliProfiles\codex\account-b\worktrees\8723\sqlharness\tests\SqlHarness.Tests\Dashboard\OptimizationComparerTests.cs:line 76
+   at System.Reflection.MethodBaseInvoker.InterpretedInvoke_Method(Object obj, IntPtr* args)
+   at System.Reflection.RuntimeMethodInfo.Invoke(Object obj, BindingFlags invokeAttr, Binder binder, Object[] parameters, CultureInfo culture)
+[xUnit.net 00:00:06.12]     SqlHarness.Tests.Dashboard.JournalReaderTests.Failed_attempt_does_not_shift_operation_detail_or_history_labels_away_from_eligible_optimization_versions [FAIL]
+  Failed SqlHarness.Tests.Dashboard.JournalReaderTests.Failed_attempt_does_not_shift_operation_detail_or_history_labels_away_from_eligible_optimization_versions [1 s]
+  Error Message:
+   Assert.Equal() Failure: Values differ
+Expected: Tuple ("v0", "v1")
+Actual:   Tuple ("v0", "v2")
+  Stack Trace:
+     at SqlHarness.Tests.Dashboard.JournalReaderTests.Failed_attempt_does_not_shift_operation_detail_or_history_labels_away_from_eligible_optimization_versions() in C:\Users\rgone\MultiCliProfiles\codex\account-b\worktrees\8723\sqlharness\tests\SqlHarness.Tests\Dashboard\JournalReaderTests.cs:line 30
+   at System.Reflection.MethodBaseInvoker.InterpretedInvoke_Method(Object obj, IntPtr* args)
+   at System.Reflection.RuntimeMethodInfo.Invoke(Object obj, BindingFlags invokeAttr, Binder binder, Object[] parameters, CultureInfo culture)
+
+Failed!  - Failed:     8, Passed:     0, Skipped:     0, Total:     8, Duration: 1 s - SqlHarness.Tests.dll (net10.0)

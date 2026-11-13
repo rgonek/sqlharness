@@ -202,11 +202,11 @@ internal sealed class JournalSeed
     }
 
     /// <summary>
-    /// Bulk seeds <paramref name="count"/> completed compare attempts into one session, for reader
+    /// Bulk seeds <paramref name="count"/> completed measured compare attempts into one session, for reader
     /// tests that page retained history. Same pooled single-transaction shape as
     /// <see cref="Operations"/>. Subject and scope are fixed and the baseline hash repeats while every
     /// candidate is unique, so <see cref="CompareHistoryBuilder"/> labels them v0 for the baseline and
-    /// one version per attempt for the candidates.
+    /// one version per attempt for the candidates. Each attempt has two synthetic representative metric rows.
     /// </summary>
     public static void Compares(string databasePath, string sessionKey, int count)
     {
@@ -224,18 +224,29 @@ internal sealed class JournalSeed
                 finished_at, status, exit_code, duration_ms, profile, engine, server, database,
                 result_sets, rows_returned, compare_subject, compare_scope, sql_hash, candidate_sql_hash)
             VALUES ($session, 'compare', $hostPid, $hostStarted, $seen, $seen,
-                $seen, 'succeeded', 0, 10, 'local', 'sqlserver', 'srv', 'db', 1, 3, 'orders', 'whole', 'base', $candidate);
+                $seen, 'succeeded', 0, 10, 'local', 'sqlserver', 'srv', 'db', 1, 3, 'orders', 'whole', 'base', $candidate)
+            RETURNING id;
             """;
         operation.Parameters.AddWithValue("$session", sessionId);
         operation.Parameters.AddWithValue("$hostPid", identity.HostPid);
         operation.Parameters.AddWithValue("$hostStarted", Timestamp(identity.HostStartedAt));
         operation.Parameters.AddWithValue("$seen", Timestamp(HostStarted));
         operation.Parameters.AddWithValue("$candidate", "candidate-0");
+        using var metric = connection.CreateCommand();
+        metric.Transaction = transaction;
+        metric.CommandText = """
+            INSERT INTO operation_metrics(operation_id, ordinal, variant, case_id, runs,
+                elapsed_ms_median, logical_reads_median, spill_count, has_warnings, has_implicit_conversion, missing_index_count)
+            VALUES ($operation, 0, 'baseline', '0', 1, 10, 100, 0, 0, 0, 0),
+                   ($operation, 1, 'candidate', '0', 1, 8, 80, 0, 0, 0, 0);
+            """;
+        metric.Parameters.AddWithValue("$operation", 0L);
         for (var index = 0; index < count; index++)
         {
             operation.Parameters["$seen"].Value = Timestamp(HostStarted.AddSeconds(index));
             operation.Parameters["$candidate"].Value = $"candidate-{index}";
-            operation.ExecuteNonQuery();
+            metric.Parameters["$operation"].Value = (long)operation.ExecuteScalar()!;
+            metric.ExecuteNonQuery();
         }
 
         transaction.Commit();

@@ -12,6 +12,45 @@ namespace SqlHarness.Tests.Dashboard;
 
 public sealed class JournalReaderTests
 {
+    [Fact]
+    public void Failed_attempt_does_not_shift_operation_detail_or_history_labels_away_from_eligible_optimization_versions()
+    {
+        using var home = new TempHome();
+        var seed = new JournalSeed(home.DatabasePath);
+        var session = JournalSeed.Session("cli:eligible-labels");
+        var failed = seed.Compare(session, "orders", "whole", "h0", "failed-hash", status: "failed");
+        var success = seed.Compare(session, "orders", "whole", "h0", "h1");
+        foreach (var handle in new[] { failed, success })
+            seed.CompareEvidence(handle, JournalSeed.ReproConditions(), """{"kind":"compare","comparison":"Ordered","resultsEquivalent":true,"cases":[{"caseId":"0","equivalence":{"equivalent":true}}]}""",
+                new BenchmarkJournalRecord([OptimizationMetric("baseline", 100, 10, 1), OptimizationMetric("candidate", 80, 8, 1)], []));
+        var reader = Reader(home);
+        var detail = reader.Operation(success.OperationId)!;
+        var versions = reader.Optimization(detail.Operation.SessionId).Subjects.Single().Groups.Single().Scopes.Single().Versions;
+        Assert.Equal(["v0", "v1"], versions.Select(v => v.Version));
+        Assert.Equal(("v0", "v1"), (detail.BaselineVersion, detail.CandidateVersion));
+        var history = reader.CompareAttempts(detail.Operation.SessionId).Items;
+        Assert.Equal("v1", history.Single(a => a.OperationId == success.OperationId).CandidateVersion);
+        Assert.Null(history.Single(a => a.OperationId == failed.OperationId).CandidateVersion);
+        Assert.DoesNotContain(reader.Session(detail.Operation.SessionId)!.CompareSubjects.SelectMany(s => s.ScopeVersions).SelectMany(s => s.Versions), v => v.Hash == "failed-hash");
+        using (var connection = new SqliteConnection($"Data Source={home.DatabasePath};Pooling=False"))
+        {
+            connection.Open();
+            using var frozen = connection.CreateCommand();
+            frozen.CommandText = """
+                INSERT INTO compare_version_labels(context_kind, context_key, subject, scope, sql_hash, label)
+                VALUES ('mcp', $session, 'orders', 'whole', 'h0', 'v4'),
+                       ('mcp', $session, 'orders', 'whole', 'failed-hash', 'v5'),
+                       ('mcp', $session, 'orders', 'whole', 'h1', 'v6');
+                """;
+            frozen.Parameters.AddWithValue("$session", detail.Operation.SessionId.ToString(CultureInfo.InvariantCulture));
+            frozen.ExecuteNonQuery();
+        }
+        detail = reader.Operation(success.OperationId)!;
+        Assert.Equal(("v4", "v6"), (detail.BaselineVersion, detail.CandidateVersion));
+        Assert.Equal(["v4", "v6"], reader.Optimization(detail.Operation.SessionId).Subjects.Single().Groups.Single().Scopes.Single().Versions.Select(v => v.Version));
+        Assert.Equal("v5", reader.CompareAttempts(detail.Operation.SessionId).Items.Single(a => a.OperationId == failed.OperationId).CandidateVersion);
+    }
+
     private static JournalReader Reader(TempHome home, FakeProcesses? processes = null) =>
         new(home.DatabasePath, processes ?? new FakeProcesses());
 
@@ -378,6 +417,60 @@ public sealed class JournalReaderTests
         Assert.Equal(0, row.LobPhysicalReadsAfter);
         Assert.Null(row.LobReadAheadReadsAfter);
         Assert.Null(row.ReadsAfter);
+    }
+
+    [Fact]
+    public void Optimization_reader_preserves_all_stored_table_counters_and_recorded_policy_reasons()
+    {
+        using var home = new TempHome();
+        var seed = new JournalSeed(home.DatabasePath);
+        var handle = seed.Compare(JournalSeed.Session("cli:full-io"), "orders", "whole", "h0", "h1");
+        seed.CompareEvidence(handle, JournalSeed.ReproConditions(),
+            """{"kind":"compare","resultsEquivalent":true,"cases":[{"caseId":"0","equivalence":{"equivalent":true},"regression":{"verdict":"fail","reasons":["elapsed-regressed"]}}]}""",
+            new BenchmarkJournalRecord([OptimizationMetric("baseline", 100, 10, 2) with
+            { TableIo = [new JournalTableIo("Orders", 90, 2, 3, null, 4, 10, 5, 6, 0)] }, OptimizationMetric("candidate", 80, 30, 1)], []));
+        var session = Reader(home).Sessions(new SessionQuery()).Items.Single().Id;
+        var evidence = Reader(home).OptimizationEvidence(session).Single();
+        var json = JsonSerializer.SerializeToElement(evidence, new JsonSerializerOptions(JsonSerializerDefaults.Web));
+        var table = json.GetProperty("metrics")[0].GetProperty("tableRows")[0];
+        Assert.True(table.TryGetProperty("physicalReads", out var physical), "Stored physical reads must survive the optimization reader.");
+        Assert.Equal(3, physical.GetInt64());
+        Assert.Equal(4, table.GetProperty("readAheadReads").GetInt64());
+        Assert.Equal(5, table.GetProperty("lobPhysicalReads").GetInt64());
+        Assert.Equal(6, table.GetProperty("lobReadAheadReads").GetInt64());
+        Assert.Equal("elapsed-regressed", json.GetProperty("cases")[0].GetProperty("policyReasons")[0].GetString());
+    }
+
+    [Theory]
+    [InlineData("failed")]
+    [InlineData("cancelled")]
+    [InlineData("rejected")]
+    public void Interrupted_compare_retains_diagnostics_metrics_and_history_without_creating_versions(string status)
+    {
+        using var home = new TempHome();
+        var seed = new JournalSeed(home.DatabasePath);
+        var handle = seed.Compare(JournalSeed.Session("cli:interrupted"), "orders", "whole", "h0", "h1", status);
+        seed.CompareEvidence(handle, JournalSeed.ReproConditions(), """{"kind":"compare","cases":[{"caseId":"0"}]}""",
+            new BenchmarkJournalRecord([OptimizationMetric("baseline", 100, 10, 2)], []));
+        using (var connection = new SqliteConnection($"Data Source={home.DatabasePath};Pooling=False"))
+        {
+            connection.Open();
+            using var update = connection.CreateCommand();
+            update.CommandText = "UPDATE operations SET error_message = 'Retained synthetic failure', cancel_reason = 'client' WHERE id = $id;";
+            update.Parameters.AddWithValue("$id", handle.OperationId);
+            Assert.Equal(1, update.ExecuteNonQuery());
+        }
+        var reader = Reader(home);
+        var session = reader.Sessions(new SessionQuery()).Items.Single().Id;
+        var evidence = Assert.Single(reader.OptimizationEvidence(session));
+        Assert.Equal(status, evidence.Status);
+        Assert.Equal(100, Assert.Single(evidence.Metrics).LogicalReadsMedian);
+        Assert.Empty(reader.Optimization(session).Subjects);
+        var detail = reader.Operation(handle.OperationId)!;
+        Assert.Equal("Retained synthetic failure", detail.Operation.ErrorMessage);
+        Assert.Equal("client", detail.Operation.CancelReason);
+        Assert.Single(detail.Variants);
+        Assert.Equal("orders", detail.CompareSubject);
     }
 
     [Fact]

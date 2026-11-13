@@ -466,7 +466,7 @@ public sealed class JournalReader(string databasePath, IProcessInfo processes)
             SELECT {OperationColumns} FROM operations o JOIN sessions s ON s.id = o.session_id
             WHERE o.session_id = $id ORDER BY o.id DESC LIMIT $limit;
             """, [("$id", id), ("$limit", SessionOperationLimit)], reader => ReadOperation(reader, liveness));
-        var compares = CompareHistoryBuilder.Build(CompareHistoryRows(connection, id));
+        var compares = SessionCompareHistory(connection, id);
         var subjects = CompareHistoryBuilder.Subjects(compares);
         var selectedEvidenceIds = subjects.SelectMany(subject => new[]
                 { subject.LatestWhole?.OperationId, subject.LatestCompletedWhole?.OperationId, subject.StartToLatestWhole?.OperationId })
@@ -509,15 +509,23 @@ public sealed class JournalReader(string databasePath, IProcessInfo processes)
     }
 
     /// <summary>Builds the optimization section from every retained compare and its journaled case evidence.</summary>
-    public OptimizationSection Optimization(long sessionId, bool storeSensitive = true) =>
-        OptimizationSummaryBuilder.Build(OptimizationEvidence(sessionId, storeSensitive));
+    public OptimizationSection Optimization(long sessionId, bool storeSensitive = true)
+    {
+        using var connection = OpenSnapshot();
+        if (connection is null) return OptimizationSummaryBuilder.Build([]);
+        var evidence = ReadOptimizationEvidence(connection, sessionId, null, storeSensitive);
+        var context = ContextKey.Mcp(sessionId);
+        var labels = CompareVersionLabels(connection, context);
+        return labels.Count == 0 ? OptimizationSummaryBuilder.Build(evidence)
+            : OptimizationSummaryBuilder.Build(evidence, context, labels, provisional: false);
+    }
 
     public OptimizationSection AgentOptimization(AgentSessionKey key, bool storeSensitive = true)
     {
         var evidence = OptimizationEvidenceForAgentSession(key, storeSensitive);
         var context = ContextKey.AgentSession(key.AgentKind, key.ConversationId);
         var labels = CompareVersionLabels(context);
-        var hashes = evidence.Where(item => item.Subject is not null && item.Scope is not null)
+        var hashes = evidence.Where(item => OptimizationEligibility.IsEligible(item) && item.Subject is not null && item.Scope is not null)
             .SelectMany(item => new[] { item.BaselineHash, item.CandidateHash }.Where(hash => hash is not null)
                 .Select(hash => (item.Subject!, item.Scope!, hash!))).Distinct().ToArray();
         var provisional = hashes.Any(hash => !labels.ContainsKey(hash));
@@ -536,6 +544,11 @@ public sealed class JournalReader(string databasePath, IProcessInfo processes)
         using var connection = OpenSnapshot();
         if (connection is null)
             return new Dictionary<(string Subject, string Scope, string Hash), string>();
+        return CompareVersionLabels(connection, context);
+    }
+
+    private static IReadOnlyDictionary<(string Subject, string Scope, string Hash), string> CompareVersionLabels(SqliteConnection connection, ContextKey context)
+    {
         return Query(connection, "SELECT subject, scope, sql_hash, label FROM compare_version_labels WHERE context_kind = $kind AND context_key = $key;",
             [("$kind", context.Kind), ("$key", context.Key)], reader =>
                 (Key: (reader.GetString(0), reader.GetString(1), reader.GetString(2)), Label: reader.GetString(3)))
@@ -548,6 +561,11 @@ public sealed class JournalReader(string databasePath, IProcessInfo processes)
         if (connection is null)
             return [];
 
+        return ReadOptimizationEvidence(connection, sessionId, agentSession, storeSensitive);
+    }
+
+    private IReadOnlyList<CompareEvidence> ReadOptimizationEvidence(SqliteConnection connection, long? sessionId, AgentSessionKey? agentSession, bool storeSensitive)
+    {
         var liveness = new ProcessLiveness(processes, _dead);
         var rows = Query(connection, """
             SELECT o.id, o.operation, o.compare_subject, o.compare_scope, o.database, o.engine,
@@ -637,7 +655,7 @@ public sealed class JournalReader(string databasePath, IProcessInfo processes)
                         return new CompareStatementEvidence(row.Key, row.Occurrence, text, row.PlanHash,
                             row.Status, reads, scansForStatement,
                             row.Executions, hiddenWork, objectRows)
-                        { UdfElapsedMilliseconds = row.UdfElapsedMs, RuntimeEvidenceEligible = row.EvidenceEligible, PlanLink = PlanLink(row), CpuMs = row.CpuMs, ElapsedMs = row.ElapsedMs, PlanRepetition = row.EvidenceRepetition, GrantRequestedKb = row.GrantRequestedKb, GrantGrantedKb = row.GrantGrantedKb, GrantMaxUsedKb = row.GrantMaxUsedKb, HasSpillWarning = row.HasSpillWarning };
+                        { EvidenceEligible = row.Status == "confirmed", RuntimeEvidenceEligible = row.EvidenceEligible, UdfElapsedMilliseconds = row.UdfElapsedMs, PlanLink = PlanLink(row), CpuMs = row.CpuMs, ElapsedMs = row.ElapsedMs, PlanRepetition = row.EvidenceRepetition, GrantRequestedKb = row.GrantRequestedKb, GrantGrantedKb = row.GrantGrantedKb, GrantMaxUsedKb = row.GrantMaxUsedKb, HasSpillWarning = row.HasSpillWarning };
                     }).ToArray();
                     var omittedStatements = samples.Select(row => row.OmittedStatements).DefaultIfEmpty(0).Max();
                     var attribution = statements.Length > 0 && omittedStatements == 0 && statements.All(row => row.Status == "confirmed")
@@ -894,7 +912,7 @@ public sealed class JournalReader(string databasePath, IProcessInfo processes)
         using var connection = OpenSnapshot();
         if (connection is null)
             return new Page<CompareAttemptSummary>([], null);
-        var history = CompareHistoryBuilder.Build(CompareHistoryRows(connection, sessionId));
+        var history = SessionCompareHistory(connection, sessionId);
         var pageLimit = Math.Clamp(limit, 1, MaximumLimit);
         var ordered = history.OrderByDescending(item => item.StartedAt, StringComparer.Ordinal)
             .ThenByDescending(item => item.OperationId).ToArray();
@@ -948,6 +966,18 @@ public sealed class JournalReader(string databasePath, IProcessInfo processes)
         var hasMore = rows.Count > pageLimit;
         var page = rows.Take(pageLimit).ToArray();
         return new Page<MutationRequestSummary>(page, hasMore ? page[^1].Id : null);
+    }
+
+    private IReadOnlyList<CompareAttemptSummary> SessionCompareHistory(SqliteConnection connection, long sessionId)
+    {
+        var rows = CompareHistoryRows(connection, sessionId);
+        if (rows.Count == 0) return [];
+        // Resolve eligibility and labels from the same journal snapshot as operation detail/history.
+        var eligible = ReadOptimizationEvidence(connection, sessionId, null, storeSensitive: false)
+            .Where(OptimizationEligibility.IsEligible).Select(e => e.OperationId).ToHashSet();
+        var context = ContextKey.Mcp(sessionId);
+        return CompareHistoryBuilder.Build(rows.Select(row => row with { HasUsableMeasurement = eligible.Contains(row.OperationId) }),
+            context, CompareVersionLabels(connection, context));
     }
 
     private IReadOnlyList<CompareHistoryRow> CompareHistoryRows(SqliteConnection connection, long sessionId)
@@ -1051,7 +1081,7 @@ public sealed class JournalReader(string databasePath, IProcessInfo processes)
 
         var page = matches.Take(limit).ToArray();
         var attemptsBySession = page.Where(item => item.Operation == "compare").Select(item => item.SessionId).Distinct()
-            .ToDictionary(sessionId => sessionId, sessionId => CompareHistoryBuilder.Build(CompareHistoryRows(connection, sessionId)));
+            .ToDictionary(sessionId => sessionId, sessionId => SessionCompareHistory(connection, sessionId));
         page = page.Select(item => item.Operation == "compare" && attemptsBySession.TryGetValue(item.SessionId, out var attempts)
             ? item with
             {
@@ -1155,7 +1185,7 @@ public sealed class JournalReader(string databasePath, IProcessInfo processes)
             """, [("$id", id)], ReadOperationEvent) : [];
 
         var compareVersion = summary.Operation == "compare"
-            ? CompareHistoryBuilder.Build(CompareHistoryRows(connection, summary.SessionId))
+            ? SessionCompareHistory(connection, summary.SessionId)
                 .FirstOrDefault(attempt => attempt.OperationId == id)
             : null;
         if (compareVersion is not null)
@@ -2070,7 +2100,8 @@ public sealed class JournalReader(string databasePath, IProcessInfo processes)
                     Label = StringProperty(item, "caseLabel") ?? current.Label,
                     ResultsEquivalent = BooleanProperty(equivalence, "equivalent"),
                     RegressionVerdict = StringProperty(Property(item, "regression"), "verdict"),
-                    RegressionReasons = RegressionReasons(Property(item, "regression")),
+                    PolicyReasons = ReadPolicyReasons(Property(item, "regression")),
+                    RegressionReasons = ReadPolicyReasons(Property(item, "regression")),
                 };
             }
         }
@@ -2081,7 +2112,8 @@ public sealed class JournalReader(string databasePath, IProcessInfo processes)
             {
                 ResultsEquivalent = BooleanProperty(summary, "resultsEquivalent"),
                 RegressionVerdict = StringProperty(Property(summary, "regression"), "verdict"),
-                RegressionReasons = RegressionReasons(Property(summary, "regression")),
+                PolicyReasons = ReadPolicyReasons(Property(summary, "regression")),
+                RegressionReasons = ReadPolicyReasons(Property(summary, "regression")),
             };
         }
 
@@ -2093,13 +2125,10 @@ public sealed class JournalReader(string databasePath, IProcessInfo processes)
             .ThenBy(item => item.CaseId, StringComparer.Ordinal).ToArray();
     }
 
-    private static IReadOnlyList<string> RegressionReasons(JsonElement? regression)
-    {
-        var reasons = Property(regression, "reasons");
-        return reasons is { ValueKind: JsonValueKind.Array } array
-            ? array.EnumerateArray().Where(item => item.ValueKind == JsonValueKind.String).Select(item => item.GetString()!).ToArray()
-            : [];
-    }
+    private static IReadOnlyList<string> ReadPolicyReasons(JsonElement? regression) =>
+        Property(regression, "reasons") is { ValueKind: JsonValueKind.Array } reasons
+            ? reasons.EnumerateArray().Where(item => item.ValueKind == JsonValueKind.String)
+                .Select(item => item.GetString()!).ToArray() : [];
 
     private static bool? AggregateEquivalence(IReadOnlyList<CompareCaseEvidence> cases)
     {

@@ -1,0 +1,80 @@
+{
+  "startedAt": "2026-11-11T08:10:04.409Z",
+  "mode": "screenreader",
+  "origin": "http://127.0.0.1:<isolated>",
+  "revision": "c8d0bb70af170184ea389bf81e103c05a827ab63",
+  "workingDiffSha256": "e10516d899a0ab97e5d7e1ac64b265b8be2947e352158abb1b43ff4d9a1069e0",
+  "checks": [
+    {
+      "name": "first Tab exposes skip link",
+      "active": {
+        "tag": "A",
+        "role": null,
+        "name": null,
+        "text": "Skip to main content"
+      },
+      "speech": [],
+      "rawBytes": 0
+    },
+    {
+      "name": "skip link Enter reaches main",
+      "active": {
+        "tag": "MAIN",
+        "role": null,
+        "name": null,
+        "text": "ActivityFiltersTimeLast 7 daysAgentAnyDirectoryAnyTargetAnyStarred50Include archivedStatusRunning0Failed1Rejected0Succeeded99Abandoned0TypeCompare50Query50Marke"
+      },
+      "speech": [],
+      "rawBytes": 0
+    },
+    {
+      "name": "next Tab leaves main via dashboard control",
+      "active": {
+        "tag": "INPUT",
+        "role": null,
+        "name": "Search activity",
+        "text": ""
+      },
+      "speech": [],
+      "rawBytes": 0
+    },
+    {
+      "name": "baseline A radio name",
+      "active": {
+        "tag": "INPUT",
+        "role": null,
+        "name": "A v48",
+        "text": ""
+      },
+      "speech": [],
+      "rawBytes": 254
+    },
+    {
+      "name": "candidate B radio name",
+      "active": {
+        "tag": "INPUT",
+        "role": null,
+        "name": "B v49",
+        "text": ""
+      },
+      "speech": [],
+      "rawBytes": 2415
+    },
+    {
+      "name": "B radio keyboard change",
+      "active": {
+        "tag": "INPUT",
+        "role": null,
+        "name": "B v48",
+        "text": ""
+      },
+      "speech": [],
+      "rawBytes": 0
+    }
+  ],
+  "limitations": [],
+  "browser": "156.0.8078.4",
+  "nvdaPid": 27860,
+  "error": "locator.focus: Timeout 15000ms exceeded.\nCall log:\n\u001b[2m  - waiting for locator('section[aria-label=\"Version comparison\"]').getByRole('button', { name: /^Policy:/ }).first()\u001b[22m\n\n    at C:\\Users\\rgone\\MultiCliProfiles\\codex\\account-b\\worktrees\\8723\\sqlharness\\plans\\126-evidence\\harness\\native-accessibility.mjs:80:183\n    at step (C:\\Users\\rgone\\MultiCliProfiles\\codex\\account-b\\worktrees\\8723\\sqlharness\\plans\\126-evidence\\harness\\native-accessibility.mjs:71:145)\n    at C:\\Users\\rgone\\MultiCliProfiles\\codex\\account-b\\worktrees\\8723\\sqlharness\\plans\\126-evidence\\harness\\native-accessibility.mjs:80:10",
+  "finishedAt": "2026-11-11T08:10:43.593Z"
+}

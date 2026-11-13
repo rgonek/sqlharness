@@ -1,8 +1,9 @@
+import { OutcomeDimensions } from "./CaseOutcomeDetails"
 import { ComparisonPending } from "./ComparisonPending"
 import { Separator } from "@/components/ui/separator"
 import { Popover, PopoverTrigger, PopoverContent, PopoverTitle } from "@/components/ui/popover"
 import { SegmentedRadioGroup } from "@/components/SegmentedRadioGroup"
-import { Fragment, useState, type ReactNode } from "react"
+import { Fragment, useEffect, useState, cloneElement, isValidElement, type ReactElement, type ReactNode } from "react"
 import { createPortal } from "react-dom"
 import { Link } from "@tanstack/react-router"
 import type { AgentSessionKey, OptimizationActionReference, OptimizationComparison, ScopeVersions } from "@/api/types"
@@ -13,7 +14,7 @@ import { Button } from "@/components/ui/button"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { IoDetails } from "./IoDetails"
 import { VersionPlan } from "./VersionPlan"
-import { conditionsDifferMessage, optimizationBasisLabel, optimizationMarkdown } from "@/lib/optimizationMarkdown"
+import { conditionsDifferMessage, optimizationBasisLabel, optimizationMarkdown, optimizationMetricRows } from "@/lib/optimizationMarkdown"
 import { badgeTier } from "@/lib/flags"
 import { operationReturnSearch } from "@/lib/sessionSearch"
 import type { SqlVersionOption } from "@/lib/compare"
@@ -24,20 +25,20 @@ import { ArrowDown01Icon } from "@hugeicons/core-free-icons";
 
 function actionCase(action: OptimizationActionReference | null | undefined, selectedCase: string): string | null {
   if (!action?.caseIds.length) return null
-  const mappedCaseId = action.caseIdsByFingerprint?.[selectedCase]
-  if (mappedCaseId) return mappedCaseId
-  return action.caseIds.includes(selectedCase) ? selectedCase : selectedCase === "all" ? action.caseIds[0] : null
+  if (action.caseIdsByFingerprint) return action.caseIdsByFingerprint[selectedCase] ?? null
+  return action.caseIds.includes(selectedCase) ? selectedCase : null
 }
 
-function VersionAction({ label, action, selectedCase }: {
-  label: string; action: OptimizationActionReference | null | undefined; selectedCase: string
+function VersionAction({ label, role, action, selectedCase, caseLabel, sessionId, sessionSearch, agentSessionKey }: {
+  label: string; role: string; action: OptimizationActionReference | null | undefined; selectedCase: string; caseLabel: string; sessionId: number; sessionSearch: SessionSearch; agentSessionKey?: AgentSessionKey
 }) {
   const caseId = actionCase(action, selectedCase)
   if (!action || !caseId) return null
-  return <section className="space-y-1" aria-label={`${label} actions`}>
-    <h3 className="text-sm font-medium">{label} · {action.side}</h3>
+  return <section className="space-y-1" aria-label={`${role} ${label} scripts`}>
+    <h3 className="break-words text-sm font-medium">{role} {label} · {caseLabel}</h3>
     <div className="flex flex-wrap items-center gap-2">
-      <ReproScriptButtons operationId={action.operationId} side={action.side === "measure" ? "query" : action.side} caseId={caseId} />
+      <Link to="/operations/$id" params={{ id: String(action.operationId) }} search={operationReturnSearch(sessionId, sessionSearch, agentSessionKey)} className="inline-flex min-h-6 items-center text-sm underline">{action.side === "measure" ? `Measure for ${label}` : `Plans for ${label}`}</Link>
+      <ReproScriptButtons labelPrefix={`${role} ${label} case ${caseLabel}`} operationId={action.operationId} side={action.side === "measure" ? "query" : action.side} caseId={caseId} />
     </div>
   </section>
 }
@@ -61,21 +62,31 @@ export function ComparisonPanel({ pending = false, comparison, sessionId, agentS
   engine?: string | null
   sessionSearch?: SessionSearch
   searchState?: { case?: string; agg?: string; view?: "changed" | "whole" | "statements" }
-  onSelectionChange?: (patch: { case?: string; agg?: string; view?: "changed" | "whole" | "statements" }) => void
+  onSelectionChange?: (patch: { case?: string; agg?: string; view?: "changed" | "whole" | "statements" }, options?: { replace?: boolean }) => void
   hideCaseSelector?: boolean
 }) {
   const approximate = comparison.basis === "ApproximateAcrossConditions"
   const [selectorsOpen, setSelectorsOpen] = useState(false)
-  const activeCase = searchState?.case ?? comparison.selectedCase
+  const requestedCase = searchState?.case
+  const staleCase = !pending && requestedCase != null && requestedCase !== "all" && requestedCase !== comparison.selectedCase && !comparison.cases.some(item => item.id === requestedCase)
+  const activeCase = staleCase ? comparison.selectedCase : requestedCase ?? comparison.selectedCase
+  useEffect(() => {
+    if (staleCase) onSelectionChange?.({ case: comparison.selectedCase }, { replace: true })
+  }, [staleCase, comparison.selectedCase, onSelectionChange])
   const activeAggregate = searchState?.agg ?? comparison.aggregate
-  const activeView = comparison.fallbackNote ? comparison.view ?? "whole" : searchState?.view ?? comparison.view ?? "statements"
+  const activeView = searchState?.view ?? comparison.view ?? "statements"
   const scriptCase = activeCase === "all" ? comparison.cases[0]?.id ?? "all" : activeCase
+  const scriptLabel = comparison.cases.find(item => item.id === scriptCase)?.label ?? scriptCase
   const sqlOptions: SqlVersionOption[] = versions.map(version => ({ version: version.version, hash: version.hash }))
   function updateSearch(patch: { case?: string; agg?: string; view?: "changed" | "whole" | "statements" }) {
     setSelectorsOpen(false)
     onSelectionChange?.(patch)
   }
 
+  const baselineActions = <VersionAction role="Baseline" label={comparison.a} action={comparison.beforeAction} selectedCase={scriptCase} caseLabel={scriptLabel} sessionId={sessionId} sessionSearch={sessionSearch} agentSessionKey={agentSessionKey} />
+  const candidateActions = <VersionAction role="Candidate" label={comparison.b} action={comparison.afterAction} selectedCase={scriptCase} caseLabel={scriptLabel} sessionId={sessionId} sessionSearch={sessionSearch} agentSessionKey={agentSessionKey} />
+  const diffActions = { baselineActions, candidateActions }
+  const suppliedDiff = isValidElement(diff) ? cloneElement(diff as ReactElement<typeof diffActions>, diffActions) : diff
   const copy = <div className="comparison-copy"><ComparisonPending pending={pending}><CopyButton label="Copy summary" getText={() => optimizationMarkdown(comparison, subject, scope)} /></ComparisonPending></div>
   const selectors = <Popover open={selectorsOpen && !pending} onOpenChange={open => setSelectorsOpen(pending ? false : open)}><PopoverTrigger render={<Button variant="outline" size="sm" />}>{activeCase === "all" ? "All cases" : comparison.cases.find(item => item.id === activeCase)?.label ?? activeCase} · {activeAggregate === "mean" ? "Mean" : "Sum"}<HugeiconsIcon icon={ArrowDown01Icon} strokeWidth={2} data-icon="inline-end" /></PopoverTrigger><PopoverContent align="end" className="max-h-80 max-w-[calc(100vw-2rem)] overflow-auto"><PopoverTitle>Comparison options</PopoverTitle><div className="flex flex-col gap-2" aria-label="Cases">
       {!hideCaseSelector && <><span className="text-sm font-medium">Case</span>
@@ -89,10 +100,14 @@ export function ComparisonPanel({ pending = false, comparison, sessionId, agentS
   const toolbar = <div className="comparison-toolbar">{selectors}{copy}</div>
 
   return <section aria-label="Version comparison" className="comparison-panel" aria-busy={pending}>
+    <ComparisonPending pending={pending}><div className="flex flex-wrap items-center justify-between gap-2" aria-label="Comparison provenance">
+      <div className="flex flex-wrap items-center gap-3">{comparison.operationId !== null ? <Link to="/operations/$id" params={{ id: String(comparison.operationId) }} search={operationReturnSearch(sessionId, sessionSearch, agentSessionKey)} className="inline-flex min-h-6 items-center text-sm underline">Operation #{comparison.operationId}</Link> : <><VersionOperationLink action={comparison.beforeAction} sessionId={sessionId} sessionSearch={sessionSearch} agentSessionKey={agentSessionKey} /><VersionOperationLink action={comparison.afterAction} sessionId={sessionId} sessionSearch={sessionSearch} agentSessionKey={agentSessionKey} /></>}</div>
+      <OutcomeDimensions outcomes={pending ? undefined : comparison.outcomes} cases={pending ? [] : comparison.caseOutcomes} />
+    </div></ComparisonPending>
     {!navigation && (toolbarTarget ? createPortal(toolbar, toolbarTarget) : toolbar)}
 
 
-    <ComparisonPending pending={pending} className="comparison-notices"><div className="flex flex-wrap gap-3">{comparison.operationId !== null ? <Link to="/operations/$id" params={{ id: String(comparison.operationId) }} search={operationReturnSearch(sessionId, sessionSearch, agentSessionKey)} className="text-sm underline">Operation #{comparison.operationId}</Link> : <><VersionOperationLink action={comparison.beforeAction} sessionId={sessionId} sessionSearch={sessionSearch} agentSessionKey={agentSessionKey} /><VersionOperationLink action={comparison.afterAction} sessionId={sessionId} sessionSearch={sessionSearch} agentSessionKey={agentSessionKey} /></>}</div><StatementHiddenWork rows={comparison.statements ?? []} />
+    <ComparisonPending pending={pending} className="comparison-notices"><StatementHiddenWork rows={comparison.statements ?? []} />
     {((comparison.omittedStatementsBefore ?? 0) > 0 || (comparison.omittedStatementsAfter ?? 0) > 0) && <div className="space-y-1 text-sm text-muted-foreground">
       {(comparison.omittedStatementsBefore ?? 0) > 0 && <p>omitted statements: {comparison.omittedStatementsBefore} (their reads remain in the batch total)</p>}
       {(comparison.omittedStatementsAfter ?? 0) > 0 && <p>omitted statements: {comparison.omittedStatementsAfter} (their reads remain in the batch total)</p>}
@@ -111,8 +126,8 @@ export function ComparisonPanel({ pending = false, comparison, sessionId, agentS
         <div className="comparison-tab-header"><TabsList variant="line"><TabsTrigger value="diff">SQL diff</TabsTrigger><TabsTrigger value="io">IO</TabsTrigger><TabsTrigger value="plan">Plan</TabsTrigger>{timing && <TabsTrigger value="timing">Timing</TabsTrigger>}{details && <TabsTrigger value="details">Details</TabsTrigger>}</TabsList>{navigation ?? <ComparisonPending pending={pending}>{context}</ComparisonPending>}</div><Separator />
         {headerContent && <div className="comparison-header-content">{headerContent}</div>}
         {navigation && <div className="comparison-operation-context"><ComparisonPending pending={pending}>{context}</ComparisonPending><div className="comparison-operation-actions">{selectors}{copy}</div></div>}
-        <TabsContent value="diff"><ComparisonPending pending={pending} announce><div className="grid gap-3 sm:grid-cols-2"><VersionAction label={comparison.a} action={comparison.beforeAction} selectedCase={scriptCase} /><VersionAction label={comparison.b} action={comparison.afterAction} selectedCase={scriptCase} /></div>{diff ?? (sqlOptions.length > 1 ? <SessionVersionDiff key={`${comparison.a}:${comparison.groupA}:${comparison.b}:${comparison.groupB}:${sqlOptions.map(option => option.hash).join(":")}`} sessionId={sessionId} agentSessionKey={agentSessionKey} engine={engine} options={sqlOptions} initialFrom={comparison.a} initialTo={comparison.b} selectionControls={false} /> : <p className="text-sm text-muted-foreground">SQL diff requires two retained SQL versions.</p>)}</ComparisonPending></TabsContent>
-        <TabsContent value="io">{approximate && !comparison.caseRows?.length ? <p className="text-sm text-muted-foreground">No paired cases for metric comparison.</p> : comparison.basis === "ConditionsDiffer" ? <p className="text-sm text-muted-foreground">{conditionsDifferMessage}</p> : <IoDetails pending={pending} comparison={comparison} byStatement={activeView !== "whole"} onViewChange={view => updateSearch({ view })} />}</TabsContent>
+        <TabsContent value="diff"><ComparisonPending pending={pending} announce>{suppliedDiff ?? (sqlOptions.length > 1 ? <SessionVersionDiff key={`${comparison.a}:${comparison.groupA}:${comparison.b}:${comparison.groupB}:${sqlOptions.map(option => option.hash).join(":")}`} sessionId={sessionId} agentSessionKey={agentSessionKey} engine={engine} options={sqlOptions} initialFrom={comparison.a} initialTo={comparison.b} selectionControls={false} baselineActions={baselineActions} candidateActions={candidateActions} /> : <p className="text-sm text-muted-foreground">SQL diff requires two retained SQL versions.</p>)}</ComparisonPending></TabsContent>
+        <TabsContent value="io"><ComparisonPending pending={pending} announce>{comparison.basis !== "ConditionsDiffer" && (!approximate || !!comparison.caseRows?.length) && optimizationMetricRows(comparison).filter(row => !row.label.startsWith("CPU (")).map(row => <p key={row.label} className="text-sm">{row.label}: {row.before} → {row.after}</p>)}{approximate && !comparison.caseRows?.length ? <p className="text-sm text-muted-foreground">No paired cases for metric comparison.</p> : comparison.basis === "ConditionsDiffer" ? <p className="text-sm text-muted-foreground">{conditionsDifferMessage}</p> : <IoDetails pending={pending} comparison={comparison} byStatement={activeView !== "whole"} onViewChange={view => updateSearch({ view })} />}</ComparisonPending></TabsContent>
         <TabsContent value="plan"><ComparisonPending pending={pending} announce><VersionPlan a={comparison.a} b={comparison.b} before={comparison.beforeAction} after={comparison.afterAction} engine={engine} selectedCase={scriptCase} /></ComparisonPending></TabsContent>
         {timing && <TabsContent value="timing">{timing}</TabsContent>}
         {details && <TabsContent value="details">{details}</TabsContent>}
@@ -122,5 +137,5 @@ export function ComparisonPanel({ pending = false, comparison, sessionId, agentS
 }
 
 function VersionOperationLink({ action, sessionId, sessionSearch, agentSessionKey }: { action: OptimizationActionReference | null | undefined; sessionId: number; sessionSearch: SessionSearch; agentSessionKey?: AgentSessionKey }) {
-  return action ? <Link to="/operations/$id" params={{ id: String(action.operationId) }} search={operationReturnSearch(sessionId, sessionSearch, agentSessionKey)} className="text-sm underline">Operation #{action.operationId}</Link> : null
+  return action ? <Link to="/operations/$id" params={{ id: String(action.operationId) }} search={operationReturnSearch(sessionId, sessionSearch, agentSessionKey)} className="inline-flex min-h-6 items-center text-sm underline">Operation #{action.operationId}</Link> : null
 }

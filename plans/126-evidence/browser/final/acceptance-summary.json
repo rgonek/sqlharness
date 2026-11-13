@@ -1,0 +1,1412 @@
+{
+  "startedAt": "2026-11-11T14:34:13.254Z",
+  "source": "actual release dashboard, synthetic local journal",
+  "revision": "5047480003715847a1a4bb3e2cb9b537f95c0960",
+  "dirtyPaths": [
+    "M plans/126-dashboard-quality-iteration.md",
+    "?? plans/126-evidence/browser/",
+    "?? plans/126-evidence/harness/acceptance.mjs",
+    "?? plans/126-evidence/harness/native-accessibility.mjs"
+  ],
+  "fixture": {
+    "sessions": 500,
+    "operations": 10000,
+    "primarySessionOperations": 1000,
+    "versions": 50,
+    "cases": 20,
+    "seededAt": "2026-11-11T08:09:35.720Z",
+    "schemaVersion": 26
+  },
+  "performanceSkipped": false,
+  "scope": "functional/browser checks and five twenty-sample performance series",
+  "fullMatrixAcceptanceComplete": false,
+  "host": {
+    "hostname": "RobertG",
+    "platform": "win32",
+    "release": "10.0.19045",
+    "architecture": "x64",
+    "cpus": 8,
+    "cpu": "Intel(R) Core(TM) i7-4700MQ CPU @ 2.40GHz",
+    "memoryGiB": 16,
+    "browser": "156.0.8078.4"
+  },
+  "errors": [],
+  "performance": [
+    {
+      "name": "search",
+      "sampleCount": 20,
+      "warmupCount": 3,
+      "thresholdMs": 200,
+      "p95Ms": 73.70000004768372,
+      "maxLongTaskMs": 0,
+      "samples": [
+        {
+          "inputToPaintMs": 70.70000004768372,
+          "settlementAfterResponseMs": null,
+          "responseObserved": false,
+          "maxLongTaskMs": 0
+        },
+        {
+          "inputToPaintMs": 53.90000009536743,
+          "settlementAfterResponseMs": null,
+          "responseObserved": false,
+          "maxLongTaskMs": 0
+        },
+        {
+          "inputToPaintMs": 72.59999990463257,
+          "settlementAfterResponseMs": null,
+          "responseObserved": false,
+          "maxLongTaskMs": 0
+        },
+        {
+          "inputToPaintMs": 53.09999990463257,
+          "settlementAfterResponseMs": null,
+          "responseObserved": false,
+          "maxLongTaskMs": 0
+        },
+        {
+          "inputToPaintMs": 73.19999980926514,
+          "settlementAfterResponseMs": null,
+          "responseObserved": false,
+          "maxLongTaskMs": 0
+        },
+        {
+          "inputToPaintMs": 53,
+          "settlementAfterResponseMs": null,
+          "responseObserved": false,
+          "maxLongTaskMs": 0
+        },
+        {
+          "inputToPaintMs": 71.90000009536743,
+          "settlementAfterResponseMs": null,
+          "responseObserved": false,
+          "maxLongTaskMs": 0
+        },
+        {
+          "inputToPaintMs": 56.299999952316284,
+          "settlementAfterResponseMs": null,
+          "responseObserved": false,
+          "maxLongTaskMs": 0
+        },
+        {
+          "inputToPaintMs": 71,
+          "settlementAfterResponseMs": null,
+          "responseObserved": false,
+          "maxLongTaskMs": 0
+        },
+        {
+          "inputToPaintMs": 55.80000019073486,
+          "settlementAfterResponseMs": null,
+          "responseObserved": false,
+          "maxLongTaskMs": 0
+        },
+        {
+          "inputToPaintMs": 71.20000004768372,
+          "settlementAfterResponseMs": null,
+          "responseObserved": false,
+          "maxLongTaskMs": 0
+        },
+        {
+          "inputToPaintMs": 54.80000019073486,
+          "settlementAfterResponseMs": null,
+          "responseObserved": false,
+          "maxLongTaskMs": 0
+        },
+        {
+          "inputToPaintMs": 72.70000004768372,
+          "settlementAfterResponseMs": null,
+          "responseObserved": false,
+          "maxLongTaskMs": 0
+        },
+        {
+          "inputToPaintMs": 55.19999980926514,
+          "settlementAfterResponseMs": null,
+          "responseObserved": false,
+          "maxLongTaskMs": 0
+        },
+        {
+          "inputToPaintMs": 71.70000004768372,
+          "settlementAfterResponseMs": null,
+          "responseObserved": false,
+          "maxLongTaskMs": 0
+        },
+        {
+          "inputToPaintMs": 57.200000047683716,
+          "settlementAfterResponseMs": null,
+          "responseObserved": false,
+          "maxLongTaskMs": 0
+        },
+        {
+          "inputToPaintMs": 73.70000004768372,
+          "settlementAfterResponseMs": null,
+          "responseObserved": false,
+          "maxLongTaskMs": 0
+        },
+        {
+          "inputToPaintMs": 53.5,
+          "settlementAfterResponseMs": null,
+          "responseObserved": false,
+          "maxLongTaskMs": 0
+        },
+        {
+          "inputToPaintMs": 74.5,
+          "settlementAfterResponseMs": null,
+          "responseObserved": false,
+          "maxLongTaskMs": 0
+        },
+        {
+          "inputToPaintMs": 55.59999990463257,
+          "settlementAfterResponseMs": null,
+          "responseObserved": false,
+          "maxLongTaskMs": 0
+        }
+      ],
+      "note": "Input event capture to second animation frame after asserted state."
+    },
+    {
+      "name": "facet",
+      "sampleCount": 20,
+      "warmupCount": 3,
+      "thresholdMs": 200,
+      "p95Ms": 146.79999995231628,
+      "maxLongTaskMs": 89,
+      "samples": [
+        {
+          "inputToPaintMs": 42.299999952316284,
+          "settlementAfterResponseMs": null,
+          "responseObserved": false,
+          "maxLongTaskMs": 0
+        },
+        {
+          "inputToPaintMs": 109.89999985694885,
+          "settlementAfterResponseMs": null,
+          "responseObserved": false,
+          "maxLongTaskMs": 82
+        },
+        {
+          "inputToPaintMs": 43.39999985694885,
+          "settlementAfterResponseMs": null,
+          "responseObserved": false,
+          "maxLongTaskMs": 0
+        },
+        {
+          "inputToPaintMs": 110.5,
+          "settlementAfterResponseMs": null,
+          "responseObserved": false,
+          "maxLongTaskMs": 68
+        },
+        {
+          "inputToPaintMs": 44.59999990463257,
+          "settlementAfterResponseMs": null,
+          "responseObserved": false,
+          "maxLongTaskMs": 0
+        },
+        {
+          "inputToPaintMs": 110.29999995231628,
+          "settlementAfterResponseMs": null,
+          "responseObserved": false,
+          "maxLongTaskMs": 64
+        },
+        {
+          "inputToPaintMs": 44.39999985694885,
+          "settlementAfterResponseMs": null,
+          "responseObserved": false,
+          "maxLongTaskMs": 0
+        },
+        {
+          "inputToPaintMs": 108.70000004768372,
+          "settlementAfterResponseMs": null,
+          "responseObserved": false,
+          "maxLongTaskMs": 69
+        },
+        {
+          "inputToPaintMs": 44.40000009536743,
+          "settlementAfterResponseMs": null,
+          "responseObserved": false,
+          "maxLongTaskMs": 0
+        },
+        {
+          "inputToPaintMs": 110.59999990463257,
+          "settlementAfterResponseMs": null,
+          "responseObserved": false,
+          "maxLongTaskMs": 64
+        },
+        {
+          "inputToPaintMs": 44.80000019073486,
+          "settlementAfterResponseMs": null,
+          "responseObserved": false,
+          "maxLongTaskMs": 0
+        },
+        {
+          "inputToPaintMs": 94.29999995231628,
+          "settlementAfterResponseMs": null,
+          "responseObserved": false,
+          "maxLongTaskMs": 63
+        },
+        {
+          "inputToPaintMs": 44.700000047683716,
+          "settlementAfterResponseMs": null,
+          "responseObserved": false,
+          "maxLongTaskMs": 0
+        },
+        {
+          "inputToPaintMs": 112.60000014305115,
+          "settlementAfterResponseMs": null,
+          "responseObserved": false,
+          "maxLongTaskMs": 65
+        },
+        {
+          "inputToPaintMs": 45.200000047683716,
+          "settlementAfterResponseMs": null,
+          "responseObserved": false,
+          "maxLongTaskMs": 0
+        },
+        {
+          "inputToPaintMs": 109.79999995231628,
+          "settlementAfterResponseMs": null,
+          "responseObserved": false,
+          "maxLongTaskMs": 65
+        },
+        {
+          "inputToPaintMs": 41.5,
+          "settlementAfterResponseMs": null,
+          "responseObserved": false,
+          "maxLongTaskMs": 0
+        },
+        {
+          "inputToPaintMs": 188.89999985694885,
+          "settlementAfterResponseMs": null,
+          "responseObserved": false,
+          "maxLongTaskMs": 76
+        },
+        {
+          "inputToPaintMs": 50.299999952316284,
+          "settlementAfterResponseMs": null,
+          "responseObserved": false,
+          "maxLongTaskMs": 0
+        },
+        {
+          "inputToPaintMs": 146.79999995231628,
+          "settlementAfterResponseMs": null,
+          "responseObserved": false,
+          "maxLongTaskMs": 89
+        }
+      ],
+      "note": "Input event capture to second animation frame after asserted state."
+    },
+    {
+      "name": "session expansion",
+      "sampleCount": 20,
+      "warmupCount": 3,
+      "thresholdMs": 200,
+      "p95Ms": 77,
+      "maxLongTaskMs": 0,
+      "samples": [
+        {
+          "inputToPaintMs": 58.59999990463257,
+          "settlementAfterResponseMs": null,
+          "responseObserved": false,
+          "maxLongTaskMs": 0
+        },
+        {
+          "inputToPaintMs": 76.20000004768372,
+          "settlementAfterResponseMs": null,
+          "responseObserved": false,
+          "maxLongTaskMs": 0
+        },
+        {
+          "inputToPaintMs": 58.39999985694885,
+          "settlementAfterResponseMs": null,
+          "responseObserved": false,
+          "maxLongTaskMs": 0
+        },
+        {
+          "inputToPaintMs": 75.90000009536743,
+          "settlementAfterResponseMs": null,
+          "responseObserved": false,
+          "maxLongTaskMs": 0
+        },
+        {
+          "inputToPaintMs": 56.5,
+          "settlementAfterResponseMs": null,
+          "responseObserved": false,
+          "maxLongTaskMs": 0
+        },
+        {
+          "inputToPaintMs": 75.20000004768372,
+          "settlementAfterResponseMs": null,
+          "responseObserved": false,
+          "maxLongTaskMs": 0
+        },
+        {
+          "inputToPaintMs": 58.60000014305115,
+          "settlementAfterResponseMs": null,
+          "responseObserved": false,
+          "maxLongTaskMs": 0
+        },
+        {
+          "inputToPaintMs": 76.10000014305115,
+          "settlementAfterResponseMs": null,
+          "responseObserved": false,
+          "maxLongTaskMs": 0
+        },
+        {
+          "inputToPaintMs": 56.59999990463257,
+          "settlementAfterResponseMs": null,
+          "responseObserved": false,
+          "maxLongTaskMs": 0
+        },
+        {
+          "inputToPaintMs": 77,
+          "settlementAfterResponseMs": null,
+          "responseObserved": false,
+          "maxLongTaskMs": 0
+        },
+        {
+          "inputToPaintMs": 44.60000014305115,
+          "settlementAfterResponseMs": null,
+          "responseObserved": false,
+          "maxLongTaskMs": 0
+        },
+        {
+          "inputToPaintMs": 74.79999995231628,
+          "settlementAfterResponseMs": null,
+          "responseObserved": false,
+          "maxLongTaskMs": 0
+        },
+        {
+          "inputToPaintMs": 59.10000014305115,
+          "settlementAfterResponseMs": null,
+          "responseObserved": false,
+          "maxLongTaskMs": 0
+        },
+        {
+          "inputToPaintMs": 76.09999990463257,
+          "settlementAfterResponseMs": null,
+          "responseObserved": false,
+          "maxLongTaskMs": 0
+        },
+        {
+          "inputToPaintMs": 57.09999990463257,
+          "settlementAfterResponseMs": null,
+          "responseObserved": false,
+          "maxLongTaskMs": 0
+        },
+        {
+          "inputToPaintMs": 79.89999985694885,
+          "settlementAfterResponseMs": null,
+          "responseObserved": false,
+          "maxLongTaskMs": 0
+        },
+        {
+          "inputToPaintMs": 57.19999980926514,
+          "settlementAfterResponseMs": null,
+          "responseObserved": false,
+          "maxLongTaskMs": 0
+        },
+        {
+          "inputToPaintMs": 76.70000004768372,
+          "settlementAfterResponseMs": null,
+          "responseObserved": false,
+          "maxLongTaskMs": 0
+        },
+        {
+          "inputToPaintMs": 43.89999985694885,
+          "settlementAfterResponseMs": null,
+          "responseObserved": false,
+          "maxLongTaskMs": 0
+        },
+        {
+          "inputToPaintMs": 74.79999995231628,
+          "settlementAfterResponseMs": null,
+          "responseObserved": false,
+          "maxLongTaskMs": 0
+        }
+      ],
+      "note": "Input event capture to second animation frame after asserted state."
+    },
+    {
+      "name": "A/B selection",
+      "sampleCount": 20,
+      "warmupCount": 3,
+      "thresholdMs": 500,
+      "p95Ms": 95.70000004768372,
+      "maxLongTaskMs": 93,
+      "samples": [
+        {
+          "inputToPaintMs": 176.89999985694885,
+          "settlementAfterResponseMs": 95.20000004768372,
+          "responseObserved": true,
+          "maxLongTaskMs": 82
+        },
+        {
+          "inputToPaintMs": 166.5,
+          "settlementAfterResponseMs": 93.40000009536743,
+          "responseObserved": true,
+          "maxLongTaskMs": 76
+        },
+        {
+          "inputToPaintMs": 171.80000019073486,
+          "settlementAfterResponseMs": 88.90000009536743,
+          "responseObserved": true,
+          "maxLongTaskMs": 77
+        },
+        {
+          "inputToPaintMs": 178.20000004768372,
+          "settlementAfterResponseMs": 92,
+          "responseObserved": true,
+          "maxLongTaskMs": 89
+        },
+        {
+          "inputToPaintMs": 166.30000019073486,
+          "settlementAfterResponseMs": 86.30000019073486,
+          "responseObserved": true,
+          "maxLongTaskMs": 82
+        },
+        {
+          "inputToPaintMs": 167.70000004768372,
+          "settlementAfterResponseMs": 95.5,
+          "responseObserved": true,
+          "maxLongTaskMs": 76
+        },
+        {
+          "inputToPaintMs": 151.5,
+          "settlementAfterResponseMs": 77.5,
+          "responseObserved": true,
+          "maxLongTaskMs": 75
+        },
+        {
+          "inputToPaintMs": 136.29999995231628,
+          "settlementAfterResponseMs": 76.29999995231628,
+          "responseObserved": true,
+          "maxLongTaskMs": 62
+        },
+        {
+          "inputToPaintMs": 177.79999995231628,
+          "settlementAfterResponseMs": 86,
+          "responseObserved": true,
+          "maxLongTaskMs": 93
+        },
+        {
+          "inputToPaintMs": 144.29999995231628,
+          "settlementAfterResponseMs": 83,
+          "responseObserved": true,
+          "maxLongTaskMs": 69
+        },
+        {
+          "inputToPaintMs": 153.20000004768372,
+          "settlementAfterResponseMs": 88.70000004768372,
+          "responseObserved": true,
+          "maxLongTaskMs": 64
+        },
+        {
+          "inputToPaintMs": 138.29999995231628,
+          "settlementAfterResponseMs": 82.89999985694885,
+          "responseObserved": true,
+          "maxLongTaskMs": 58
+        },
+        {
+          "inputToPaintMs": 152.40000009536743,
+          "settlementAfterResponseMs": 91.5,
+          "responseObserved": true,
+          "maxLongTaskMs": 59
+        },
+        {
+          "inputToPaintMs": 135.79999995231628,
+          "settlementAfterResponseMs": 81.40000009536743,
+          "responseObserved": true,
+          "maxLongTaskMs": 58
+        },
+        {
+          "inputToPaintMs": 150.60000014305115,
+          "settlementAfterResponseMs": 89.90000009536743,
+          "responseObserved": true,
+          "maxLongTaskMs": 61
+        },
+        {
+          "inputToPaintMs": 147.30000019073486,
+          "settlementAfterResponseMs": 86.40000009536743,
+          "responseObserved": true,
+          "maxLongTaskMs": 64
+        },
+        {
+          "inputToPaintMs": 161.70000004768372,
+          "settlementAfterResponseMs": 95.70000004768372,
+          "responseObserved": true,
+          "maxLongTaskMs": 64
+        },
+        {
+          "inputToPaintMs": 159.30000019073486,
+          "settlementAfterResponseMs": 87.10000014305115,
+          "responseObserved": true,
+          "maxLongTaskMs": 76
+        },
+        {
+          "inputToPaintMs": 167.09999990463257,
+          "settlementAfterResponseMs": 92.89999985694885,
+          "responseObserved": true,
+          "maxLongTaskMs": 75
+        },
+        {
+          "inputToPaintMs": 152.59999990463257,
+          "settlementAfterResponseMs": 99.79999995231628,
+          "responseObserved": true,
+          "maxLongTaskMs": 55
+        }
+      ],
+      "note": "Response-to-paint when fetched; input-to-paint for cached data. Warm-up excluded."
+    },
+    {
+      "name": "case change",
+      "sampleCount": 20,
+      "warmupCount": 3,
+      "thresholdMs": 500,
+      "p95Ms": 164.30000019073486,
+      "maxLongTaskMs": 84,
+      "samples": [
+        {
+          "inputToPaintMs": 139.10000014305115,
+          "settlementAfterResponseMs": null,
+          "responseObserved": false,
+          "maxLongTaskMs": 68
+        },
+        {
+          "inputToPaintMs": 163.40000009536743,
+          "settlementAfterResponseMs": null,
+          "responseObserved": false,
+          "maxLongTaskMs": 66
+        },
+        {
+          "inputToPaintMs": 145.09999990463257,
+          "settlementAfterResponseMs": null,
+          "responseObserved": false,
+          "maxLongTaskMs": 61
+        },
+        {
+          "inputToPaintMs": 157.10000014305115,
+          "settlementAfterResponseMs": null,
+          "responseObserved": false,
+          "maxLongTaskMs": 84
+        },
+        {
+          "inputToPaintMs": 164.30000019073486,
+          "settlementAfterResponseMs": null,
+          "responseObserved": false,
+          "maxLongTaskMs": 66
+        },
+        {
+          "inputToPaintMs": 179.70000004768372,
+          "settlementAfterResponseMs": null,
+          "responseObserved": false,
+          "maxLongTaskMs": 61
+        },
+        {
+          "inputToPaintMs": 156.70000004768372,
+          "settlementAfterResponseMs": null,
+          "responseObserved": false,
+          "maxLongTaskMs": 62
+        },
+        {
+          "inputToPaintMs": 135.79999995231628,
+          "settlementAfterResponseMs": null,
+          "responseObserved": false,
+          "maxLongTaskMs": 63
+        },
+        {
+          "inputToPaintMs": 146.5,
+          "settlementAfterResponseMs": null,
+          "responseObserved": false,
+          "maxLongTaskMs": 61
+        },
+        {
+          "inputToPaintMs": 146.5,
+          "settlementAfterResponseMs": null,
+          "responseObserved": false,
+          "maxLongTaskMs": 63
+        },
+        {
+          "inputToPaintMs": 135.09999990463257,
+          "settlementAfterResponseMs": null,
+          "responseObserved": false,
+          "maxLongTaskMs": 59
+        },
+        {
+          "inputToPaintMs": 160.59999990463257,
+          "settlementAfterResponseMs": null,
+          "responseObserved": false,
+          "maxLongTaskMs": 58
+        },
+        {
+          "inputToPaintMs": 131.60000014305115,
+          "settlementAfterResponseMs": null,
+          "responseObserved": false,
+          "maxLongTaskMs": 61
+        },
+        {
+          "inputToPaintMs": 132.39999985694885,
+          "settlementAfterResponseMs": null,
+          "responseObserved": false,
+          "maxLongTaskMs": 0
+        },
+        {
+          "inputToPaintMs": 142.40000009536743,
+          "settlementAfterResponseMs": null,
+          "responseObserved": false,
+          "maxLongTaskMs": 64
+        },
+        {
+          "inputToPaintMs": 138.5,
+          "settlementAfterResponseMs": null,
+          "responseObserved": false,
+          "maxLongTaskMs": 59
+        },
+        {
+          "inputToPaintMs": 144.90000009536743,
+          "settlementAfterResponseMs": null,
+          "responseObserved": false,
+          "maxLongTaskMs": 59
+        },
+        {
+          "inputToPaintMs": 143.89999985694885,
+          "settlementAfterResponseMs": null,
+          "responseObserved": false,
+          "maxLongTaskMs": 75
+        },
+        {
+          "inputToPaintMs": 144.19999980926514,
+          "settlementAfterResponseMs": null,
+          "responseObserved": false,
+          "maxLongTaskMs": 71
+        },
+        {
+          "inputToPaintMs": 129.5,
+          "settlementAfterResponseMs": null,
+          "responseObserved": false,
+          "maxLongTaskMs": 59
+        }
+      ],
+      "note": "Response-to-paint when fetched; input-to-paint for cached data. Warm-up excluded."
+    }
+  ],
+  "limitations": [
+    "Automated browser evidence is not a screen-reader or usability study; screen-reader acceptance remains pending.",
+    "Local synthetic journal measurements do not establish production performance.",
+    "axe colour contrast covers text where determinable; a complete manual non-text contrast audit remains pending.",
+    "Browser zoom is approximated by equivalent 720 CSS-pixel reflow at a 1440 physical-pixel viewport; native browser 200% zoom remains pending."
+  ],
+  "finishedAt": "2026-11-11T14:37:50.283Z",
+  "passed": false,
+  "rawArchive": "acceptance.json.gz",
+  "rawSha256": "5c17fc11f91d324d4cb23ba22d5eecc4cb71d35a4b20307bd95f75b4d0fb64d8",
+  "checks": [
+    {
+      "name": "fixture counts frozen",
+      "source": "actual backend",
+      "passed": true,
+      "milliseconds": 0
+    },
+    {
+      "name": "actual DTO mixed IO/policy, zero/missing counters, sum/mean and case timing",
+      "source": "actual backend",
+      "passed": true,
+      "milliseconds": 4933
+    },
+    {
+      "name": "actual optimization has 50 versions and failed attempt excluded",
+      "source": "actual backend",
+      "passed": true,
+      "milliseconds": 719
+    },
+    {
+      "name": "independent non-adjacent pair keeps policy unavailable in actual DTO/UI",
+      "source": "actual backend",
+      "passed": true,
+      "milliseconds": 3706
+    },
+    {
+      "name": "activity readable and keyboard skip link",
+      "source": "actual backend",
+      "passed": true,
+      "milliseconds": 1564
+    },
+    {
+      "name": "activity search and facet survive detail round trip and browser back/forward",
+      "source": "actual backend",
+      "passed": true,
+      "milliseconds": 3125
+    },
+    {
+      "name": "performance search typing: 20 samples",
+      "source": "actual backend",
+      "passed": true,
+      "milliseconds": 3403
+    },
+    {
+      "name": "performance facet toggle: 20 samples",
+      "source": "actual backend",
+      "passed": true,
+      "milliseconds": 2900
+    },
+    {
+      "name": "performance session expand: 20 samples",
+      "source": "actual backend",
+      "passed": true,
+      "milliseconds": 3794
+    },
+    {
+      "name": "comparison pair and independent dimensions visible through actual UI",
+      "source": "actual backend",
+      "passed": true,
+      "milliseconds": 3026
+    },
+    {
+      "name": "performance A/B selection: 20 samples",
+      "source": "actual backend",
+      "passed": true,
+      "milliseconds": 8301
+    },
+    {
+      "name": "performance case selection: 20 samples",
+      "source": "actual backend",
+      "passed": true,
+      "milliseconds": 11980
+    },
+    {
+      "name": "selected aggregate updates table and source timing",
+      "source": "actual backend",
+      "passed": true,
+      "milliseconds": 3654
+    },
+    {
+      "name": "history successive pages stay bounded",
+      "source": "actual backend",
+      "passed": true,
+      "milliseconds": 53
+    },
+    {
+      "name": "failed compare reason retained in actual detail",
+      "source": "actual backend",
+      "passed": true,
+      "milliseconds": 866
+    },
+    {
+      "name": "actual operation header agrees with comparison pair",
+      "source": "actual backend",
+      "passed": true,
+      "milliseconds": 1320
+    },
+    {
+      "name": "activity light accessibility and screenshot",
+      "source": "actual backend",
+      "passed": true,
+      "milliseconds": 6069
+    },
+    {
+      "name": "activity dark accessibility and screenshot",
+      "source": "actual backend",
+      "passed": true,
+      "milliseconds": 7604
+    },
+    {
+      "name": "activity initial route settlement after required responses",
+      "source": "actual backend",
+      "passed": true,
+      "milliseconds": 1320
+    },
+    {
+      "name": "activity 390px page reflow",
+      "source": "actual backend",
+      "passed": true,
+      "milliseconds": 1355
+    },
+    {
+      "name": "activity 768px page reflow",
+      "source": "actual backend",
+      "passed": true,
+      "milliseconds": 1642
+    },
+    {
+      "name": "activity 1440px page reflow",
+      "source": "actual backend",
+      "passed": true,
+      "milliseconds": 1387
+    },
+    {
+      "name": "activity 1920px page reflow",
+      "source": "actual backend",
+      "passed": true,
+      "milliseconds": 1931
+    },
+    {
+      "name": "comparison light accessibility and screenshot",
+      "source": "actual backend",
+      "passed": true,
+      "milliseconds": 28052
+    },
+    {
+      "name": "comparison dark accessibility and screenshot",
+      "source": "actual backend",
+      "passed": true,
+      "milliseconds": 28108
+    },
+    {
+      "name": "comparison initial route settlement after required responses",
+      "source": "actual backend",
+      "passed": true,
+      "milliseconds": 3225
+    },
+    {
+      "name": "comparison 390px page reflow",
+      "source": "actual backend",
+      "passed": true,
+      "milliseconds": 3711
+    },
+    {
+      "name": "comparison 768px page reflow",
+      "source": "actual backend",
+      "passed": true,
+      "milliseconds": 3239
+    },
+    {
+      "name": "comparison 1440px page reflow",
+      "source": "actual backend",
+      "passed": true,
+      "milliseconds": 3310
+    },
+    {
+      "name": "comparison 1920px page reflow",
+      "source": "actual backend",
+      "passed": true,
+      "milliseconds": 3801
+    },
+    {
+      "name": "operation light accessibility and screenshot",
+      "source": "actual backend",
+      "passed": false,
+      "milliseconds": 5417,
+      "error": "1 axe violations: color-contrast"
+    },
+    {
+      "name": "operation dark accessibility and screenshot",
+      "source": "actual backend",
+      "passed": false,
+      "milliseconds": 3842,
+      "error": "1 axe violations: color-contrast"
+    },
+    {
+      "name": "operation initial route settlement after required responses",
+      "source": "actual backend",
+      "passed": true,
+      "milliseconds": 1303
+    },
+    {
+      "name": "operation 390px page reflow",
+      "source": "actual backend",
+      "passed": true,
+      "milliseconds": 1421
+    },
+    {
+      "name": "operation 768px page reflow",
+      "source": "actual backend",
+      "passed": true,
+      "milliseconds": 1785
+    },
+    {
+      "name": "operation 1440px page reflow",
+      "source": "actual backend",
+      "passed": true,
+      "milliseconds": 1469
+    },
+    {
+      "name": "operation 1920px page reflow",
+      "source": "actual backend",
+      "passed": true,
+      "milliseconds": 1374
+    },
+    {
+      "name": "usage light accessibility and screenshot",
+      "source": "actual backend",
+      "passed": true,
+      "milliseconds": 2779
+    },
+    {
+      "name": "usage dark accessibility and screenshot",
+      "source": "actual backend",
+      "passed": true,
+      "milliseconds": 3072
+    },
+    {
+      "name": "usage initial route settlement after required responses",
+      "source": "actual backend",
+      "passed": true,
+      "milliseconds": 1123
+    },
+    {
+      "name": "usage 390px page reflow",
+      "source": "actual backend",
+      "passed": true,
+      "milliseconds": 995
+    },
+    {
+      "name": "usage 768px page reflow",
+      "source": "actual backend",
+      "passed": true,
+      "milliseconds": 1014
+    },
+    {
+      "name": "usage 1440px page reflow",
+      "source": "actual backend",
+      "passed": true,
+      "milliseconds": 1031
+    },
+    {
+      "name": "usage 1920px page reflow",
+      "source": "actual backend",
+      "passed": true,
+      "milliseconds": 1205
+    },
+    {
+      "name": "profiles light accessibility and screenshot",
+      "source": "actual backend",
+      "passed": true,
+      "milliseconds": 1419
+    },
+    {
+      "name": "profiles dark accessibility and screenshot",
+      "source": "actual backend",
+      "passed": true,
+      "milliseconds": 1173
+    },
+    {
+      "name": "profiles initial route settlement after required responses",
+      "source": "actual backend",
+      "passed": true,
+      "milliseconds": 267
+    },
+    {
+      "name": "profiles 390px page reflow",
+      "source": "actual backend",
+      "passed": true,
+      "milliseconds": 312
+    },
+    {
+      "name": "profiles 768px page reflow",
+      "source": "actual backend",
+      "passed": true,
+      "milliseconds": 361
+    },
+    {
+      "name": "profiles 1440px page reflow",
+      "source": "actual backend",
+      "passed": true,
+      "milliseconds": 415
+    },
+    {
+      "name": "profiles 1920px page reflow",
+      "source": "actual backend",
+      "passed": true,
+      "milliseconds": 400
+    },
+    {
+      "name": "settings light accessibility and screenshot",
+      "source": "actual backend",
+      "passed": true,
+      "milliseconds": 1992
+    },
+    {
+      "name": "settings dark accessibility and screenshot",
+      "source": "actual backend",
+      "passed": true,
+      "milliseconds": 1931
+    },
+    {
+      "name": "settings initial route settlement after required responses",
+      "source": "actual backend",
+      "passed": true,
+      "milliseconds": 338
+    },
+    {
+      "name": "settings 390px page reflow",
+      "source": "actual backend",
+      "passed": true,
+      "milliseconds": 445
+    },
+    {
+      "name": "settings 768px page reflow",
+      "source": "actual backend",
+      "passed": true,
+      "milliseconds": 416
+    },
+    {
+      "name": "settings 1440px page reflow",
+      "source": "actual backend",
+      "passed": true,
+      "milliseconds": 438
+    },
+    {
+      "name": "settings 1920px page reflow",
+      "source": "actual backend",
+      "passed": true,
+      "milliseconds": 471
+    },
+    {
+      "name": "200% equivalent CSS reflow and reduced motion",
+      "source": "actual backend",
+      "passed": true,
+      "milliseconds": 2512
+    },
+    {
+      "name": "actual case outcome dialog explains lower reads with policy failure; keyboard focus return",
+      "source": "actual backend",
+      "passed": false,
+      "milliseconds": 3778,
+      "error": "Case outcome dialog focus did not return"
+    },
+    {
+      "name": "approximate comparison caveat remains prominent",
+      "source": "intercepted approximate DTO based on actual comparison; not journal-derived cross-condition proof",
+      "passed": true,
+      "milliseconds": 2190
+    },
+    {
+      "name": "copy baseline/candidate preserves actual stored SQL and manual fallback focus",
+      "source": "actual stored SQL; intercepted Clipboard write failure for manual-copy branch",
+      "passed": true,
+      "milliseconds": 2595
+    },
+    {
+      "name": "large SQL and long subject stay bounded and preserve original copy",
+      "source": "intercepted large SQL and long subject in actual detail DTO",
+      "passed": false,
+      "milliseconds": 1398,
+      "error": "Bounded SQL copy truncated original text"
+    },
+    {
+      "name": "rejected operation shows reason without fabricating successful evidence",
+      "source": "intercepted rejected operation based on actual failed detail",
+      "passed": true,
+      "milliseconds": 674
+    },
+    {
+      "name": "delayed comparison has local loading feedback then settles",
+      "source": "actual backend comparison with 1200ms intercepted delay, excluded from CPU timings",
+      "passed": true,
+      "milliseconds": 3849
+    },
+    {
+      "name": "empty Activity journal view has usable filter/search next step",
+      "source": "intercepted empty journal pages; actual shell and UI",
+      "passed": true,
+      "milliseconds": 685
+    },
+    {
+      "name": "disconnect feedback and reconnect restore actual route",
+      "source": "intercepted transport outage and removal; actual backend on retry",
+      "passed": true,
+      "milliseconds": 1684
+    },
+    {
+      "name": "profile editor and intercepted save failure retain next step",
+      "source": "intercepted PUT failure; actual GET profile, no persistent write",
+      "passed": true,
+      "milliseconds": 469
+    },
+    {
+      "name": "intercepted operation HTTP 401 feedback",
+      "source": "intercepted transient HTTP response",
+      "passed": true,
+      "milliseconds": 282
+    },
+    {
+      "name": "intercepted operation HTTP 408 feedback",
+      "source": "intercepted transient HTTP response",
+      "passed": true,
+      "milliseconds": 253
+    },
+    {
+      "name": "intercepted operation HTTP 500 feedback",
+      "source": "intercepted transient HTTP response",
+      "passed": true,
+      "milliseconds": 3605
+    },
+    {
+      "name": "intercepted approval request keyboard focus return; no decision sent",
+      "source": "intercepted SSE snapshot; no approval/denial sent",
+      "passed": false,
+      "milliseconds": 3976,
+      "error": "Approval focus did not return to trigger"
+    }
+  ],
+  "accessibility": [
+    {
+      "name": "activity-light",
+      "violationCount": 0,
+      "violations": [],
+      "incomplete": [
+        {
+          "id": "aria-hidden-focus",
+          "count": 6
+        },
+        {
+          "id": "aria-prohibited-attr",
+          "count": 3
+        },
+        {
+          "id": "aria-valid-attr-value",
+          "count": 2
+        }
+      ],
+      "measuredContrastTotal": 1159
+    },
+    {
+      "name": "activity-dark",
+      "violationCount": 0,
+      "violations": [],
+      "incomplete": [
+        {
+          "id": "aria-hidden-focus",
+          "count": 6
+        },
+        {
+          "id": "aria-prohibited-attr",
+          "count": 3
+        },
+        {
+          "id": "aria-valid-attr-value",
+          "count": 2
+        }
+      ],
+      "measuredContrastTotal": 1159
+    },
+    {
+      "name": "comparison-light",
+      "violationCount": 0,
+      "violations": [],
+      "incomplete": [
+        {
+          "id": "aria-hidden-focus",
+          "count": 6
+        },
+        {
+          "id": "aria-prohibited-attr",
+          "count": 150
+        },
+        {
+          "id": "aria-valid-attr-value",
+          "count": 1
+        }
+      ],
+      "measuredContrastTotal": 3818
+    },
+    {
+      "name": "comparison-dark",
+      "violationCount": 0,
+      "violations": [],
+      "incomplete": [
+        {
+          "id": "aria-hidden-focus",
+          "count": 6
+        },
+        {
+          "id": "aria-prohibited-attr",
+          "count": 150
+        },
+        {
+          "id": "aria-valid-attr-value",
+          "count": 1
+        }
+      ],
+      "measuredContrastTotal": 3818
+    },
+    {
+      "name": "operation-light",
+      "violationCount": 1,
+      "violations": [
+        {
+          "id": "color-contrast",
+          "impact": "serious",
+          "nodes": 13
+        }
+      ],
+      "incomplete": [
+        {
+          "id": "aria-hidden-focus",
+          "count": 6
+        },
+        {
+          "id": "aria-prohibited-attr",
+          "count": 3
+        },
+        {
+          "id": "aria-valid-attr-value",
+          "count": 1
+        },
+        {
+          "id": "color-contrast",
+          "count": 2
+        }
+      ],
+      "measuredContrastTotal": 68
+    },
+    {
+      "name": "operation-dark",
+      "violationCount": 1,
+      "violations": [
+        {
+          "id": "color-contrast",
+          "impact": "serious",
+          "nodes": 2
+        }
+      ],
+      "incomplete": [
+        {
+          "id": "aria-hidden-focus",
+          "count": 6
+        },
+        {
+          "id": "aria-prohibited-attr",
+          "count": 3
+        },
+        {
+          "id": "aria-valid-attr-value",
+          "count": 1
+        },
+        {
+          "id": "color-contrast",
+          "count": 2
+        }
+      ],
+      "measuredContrastTotal": 79
+    },
+    {
+      "name": "usage-light",
+      "violationCount": 0,
+      "violations": [],
+      "incomplete": [
+        {
+          "id": "aria-hidden-focus",
+          "count": 6
+        },
+        {
+          "id": "aria-prohibited-attr",
+          "count": 1
+        },
+        {
+          "id": "aria-valid-attr-value",
+          "count": 22
+        },
+        {
+          "id": "th-has-data-cells",
+          "count": 1
+        }
+      ],
+      "measuredContrastTotal": 212
+    },
+    {
+      "name": "usage-dark",
+      "violationCount": 0,
+      "violations": [],
+      "incomplete": [
+        {
+          "id": "aria-hidden-focus",
+          "count": 6
+        },
+        {
+          "id": "aria-prohibited-attr",
+          "count": 1
+        },
+        {
+          "id": "aria-valid-attr-value",
+          "count": 22
+        },
+        {
+          "id": "th-has-data-cells",
+          "count": 1
+        }
+      ],
+      "measuredContrastTotal": 212
+    },
+    {
+      "name": "profiles-light",
+      "violationCount": 0,
+      "violations": [],
+      "incomplete": [
+        {
+          "id": "aria-hidden-focus",
+          "count": 6
+        },
+        {
+          "id": "aria-valid-attr-value",
+          "count": 1
+        }
+      ],
+      "measuredContrastTotal": 43
+    },
+    {
+      "name": "profiles-dark",
+      "violationCount": 0,
+      "violations": [],
+      "incomplete": [
+        {
+          "id": "aria-hidden-focus",
+          "count": 6
+        },
+        {
+          "id": "aria-valid-attr-value",
+          "count": 1
+        }
+      ],
+      "measuredContrastTotal": 43
+    },
+    {
+      "name": "settings-light",
+      "violationCount": 0,
+      "violations": [],
+      "incomplete": [
+        {
+          "id": "aria-hidden-focus",
+          "count": 6
+        },
+        {
+          "id": "aria-valid-attr-value",
+          "count": 1
+        }
+      ],
+      "measuredContrastTotal": 123
+    },
+    {
+      "name": "settings-dark",
+      "violationCount": 0,
+      "violations": [],
+      "incomplete": [
+        {
+          "id": "aria-hidden-focus",
+          "count": 6
+        },
+        {
+          "id": "aria-valid-attr-value",
+          "count": 1
+        }
+      ],
+      "measuredContrastTotal": 123
+    },
+    {
+      "name": "synthetic-approval",
+      "violationCount": 0,
+      "violations": [],
+      "incomplete": [
+        {
+          "id": "aria-hidden-focus",
+          "count": 3
+        },
+        {
+          "id": "color-contrast",
+          "count": 3
+        }
+      ],
+      "measuredContrastTotal": 1184
+    }
+  ],
+  "requestCount": 73,
+  "screenshotCount": 55
+}

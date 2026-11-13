@@ -1,0 +1,1 @@
+Historical images are retained locally at D:\temp\sqlharness-dashboard-audit\superseded-captures\provisional. This superseded run is diagnostic evidence, not final visual acceptance. File hashes are recorded in archived-image-manifest.json. Current accepted screenshots are in ../acceptance-5f05ca07/.

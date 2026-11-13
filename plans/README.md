@@ -10,7 +10,10 @@ Plan [123](123-shared-version-table-across-conditions.md): **DONE; locally integ
 
 Plan [104](104-stable-local-object-io-aggregation.md): **DONE; locally integrated into `main` at `56f3dae4` (2026-10-24)** — Luna xhigh and Sol low integration reviews approved; combined Windows gate passed on `d2f2b060` (Core 4717, MCP 524, UI 372 passed), branch format 21 files passed. Earlier timeout and retry logs retained. No push/install; Linux/live UAT unverified. See [integration evidence](104-evidence/integration/verification.md).
 
+Plan [126](126-dashboard-quality-iteration.md): **COMPLETE on `dashboard-quality-9`** — all14 categories9.0-9.2. Actual NVDA17/17 and copy-focus browser5/5; broader matrix72/72. Final Windows gate PASS on85c75cb2 (UI544, Core4873/11skips, MCP537/4skips). [Scorecard](126-evidence/scorecard.md), [NVDA](126-evidence/browser/native-accessibility/nvda-acceptance.md), [verification](126-evidence/verification.md). No main integration or publication. Integration with the independently completed Plan125 on current main is in progress; combined verification is required before push.
+
 ## In progress
+
 
 | Plan | Scope | Dependencies | Status |
 |---|---|---|

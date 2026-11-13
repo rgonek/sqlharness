@@ -1,0 +1,3208 @@
+{
+  "direct": {
+    "a": "v48",
+    "b": "v49",
+    "basis": "MeasuredTogether",
+    "operationId": 10000,
+    "equivalenceLabel": "results equivalent (direct)",
+    "cases": [
+      {
+        "id": "synthetic-case-0",
+        "label": "@CustomerId = 1",
+        "outcome": "better"
+      },
+      {
+        "id": "synthetic-case-9",
+        "label": "@CustomerId = 10",
+        "outcome": "better"
+      },
+      {
+        "id": "synthetic-case-10",
+        "label": "@CustomerId = 11",
+        "outcome": "better"
+      },
+      {
+        "id": "synthetic-case-11",
+        "label": "@CustomerId = 12",
+        "outcome": "better"
+      },
+      {
+        "id": "synthetic-case-12",
+        "label": "@CustomerId = 13",
+        "outcome": "better"
+      },
+      {
+        "id": "synthetic-case-13",
+        "label": "@CustomerId = 14",
+        "outcome": "better"
+      },
+      {
+        "id": "synthetic-case-14",
+        "label": "@CustomerId = 15",
+        "outcome": "better"
+      },
+      {
+        "id": "synthetic-case-15",
+        "label": "@CustomerId = 16",
+        "outcome": "better"
+      },
+      {
+        "id": "synthetic-case-16",
+        "label": "@CustomerId = 17",
+        "outcome": "better"
+      },
+      {
+        "id": "synthetic-case-17",
+        "label": "@CustomerId = 18",
+        "outcome": "better"
+      },
+      {
+        "id": "synthetic-case-18",
+        "label": "@CustomerId = 19",
+        "outcome": "better"
+      },
+      {
+        "id": "synthetic-case-1",
+        "label": "@CustomerId = 2",
+        "outcome": "better"
+      },
+      {
+        "id": "synthetic-case-19",
+        "label": "@CustomerId = 20",
+        "outcome": "better"
+      },
+      {
+        "id": "synthetic-case-2",
+        "label": "@CustomerId = 3",
+        "outcome": "better"
+      },
+      {
+        "id": "synthetic-case-3",
+        "label": "@CustomerId = 4",
+        "outcome": "same"
+      },
+      {
+        "id": "synthetic-case-4",
+        "label": "@CustomerId = 5",
+        "outcome": "better"
+      },
+      {
+        "id": "synthetic-case-5",
+        "label": "@CustomerId = 6",
+        "outcome": "better"
+      },
+      {
+        "id": "synthetic-case-6",
+        "label": "@CustomerId = 7",
+        "outcome": "better"
+      },
+      {
+        "id": "synthetic-case-7",
+        "label": "@CustomerId = 8",
+        "outcome": "better"
+      },
+      {
+        "id": "synthetic-case-8",
+        "label": "@CustomerId = 9",
+        "outcome": "better"
+      }
+    ],
+    "selectedCase": "all",
+    "aggregate": "sum",
+    "coverageLabel": "",
+    "mixed": null,
+    "tables": [
+      {
+        "table": "Orders",
+        "scansBefore": 20,
+        "scansAfter": 20,
+        "readsBefore": 7144,
+        "readsAfter": 6805,
+        "change": "−5%",
+        "lobLogicalReadsBefore": 0,
+        "lobLogicalReadsAfter": 0,
+        "dataLogicalReadsBefore": 7144,
+        "dataLogicalReadsAfter": 6805,
+        "physicalReadsBefore": 0,
+        "physicalReadsAfter": 0,
+        "readAheadReadsBefore": null,
+        "readAheadReadsAfter": null,
+        "lobPhysicalReadsBefore": 0,
+        "lobPhysicalReadsAfter": 0,
+        "lobReadAheadReadsBefore": 0,
+        "lobReadAheadReadsAfter": 0
+      }
+    ],
+    "collapsed": null,
+    "elapsed": {
+      "beforeMs": 200,
+      "afterMs": 220,
+      "policyVerdict": "fail",
+      "differentRun": false
+    },
+    "groupA": null,
+    "groupB": null,
+    "groupLabelA": null,
+    "groupLabelB": null,
+    "caseRows": [
+      {
+        "caseKey": "synthetic-case-0",
+        "labelA": "@CustomerId = 1",
+        "labelB": "@CustomerId = 1",
+        "rowsA": 1,
+        "rowsB": 1,
+        "rowsAVaries": false,
+        "rowsBVaries": false
+      },
+      {
+        "caseKey": "synthetic-case-9",
+        "labelA": "@CustomerId = 10",
+        "labelB": "@CustomerId = 10",
+        "rowsA": 1,
+        "rowsB": 1,
+        "rowsAVaries": false,
+        "rowsBVaries": false
+      },
+      {
+        "caseKey": "synthetic-case-10",
+        "labelA": "@CustomerId = 11",
+        "labelB": "@CustomerId = 11",
+        "rowsA": 1,
+        "rowsB": 1,
+        "rowsAVaries": false,
+        "rowsBVaries": false
+      },
+      {
+        "caseKey": "synthetic-case-11",
+        "labelA": "@CustomerId = 12",
+        "labelB": "@CustomerId = 12",
+        "rowsA": 1,
+        "rowsB": 1,
+        "rowsAVaries": false,
+        "rowsBVaries": false
+      },
+      {
+        "caseKey": "synthetic-case-12",
+        "labelA": "@CustomerId = 13",
+        "labelB": "@CustomerId = 13",
+        "rowsA": 1,
+        "rowsB": 1,
+        "rowsAVaries": false,
+        "rowsBVaries": false
+      },
+      {
+        "caseKey": "synthetic-case-13",
+        "labelA": "@CustomerId = 14",
+        "labelB": "@CustomerId = 14",
+        "rowsA": 1,
+        "rowsB": 1,
+        "rowsAVaries": false,
+        "rowsBVaries": false
+      },
+      {
+        "caseKey": "synthetic-case-14",
+        "labelA": "@CustomerId = 15",
+        "labelB": "@CustomerId = 15",
+        "rowsA": 1,
+        "rowsB": 1,
+        "rowsAVaries": false,
+        "rowsBVaries": false
+      },
+      {
+        "caseKey": "synthetic-case-15",
+        "labelA": "@CustomerId = 16",
+        "labelB": "@CustomerId = 16",
+        "rowsA": 1,
+        "rowsB": 1,
+        "rowsAVaries": false,
+        "rowsBVaries": false
+      },
+      {
+        "caseKey": "synthetic-case-16",
+        "labelA": "@CustomerId = 17",
+        "labelB": "@CustomerId = 17",
+        "rowsA": 1,
+        "rowsB": 1,
+        "rowsAVaries": false,
+        "rowsBVaries": false
+      },
+      {
+        "caseKey": "synthetic-case-17",
+        "labelA": "@CustomerId = 18",
+        "labelB": "@CustomerId = 18",
+        "rowsA": 1,
+        "rowsB": 1,
+        "rowsAVaries": false,
+        "rowsBVaries": false
+      },
+      {
+        "caseKey": "synthetic-case-18",
+        "labelA": "@CustomerId = 19",
+        "labelB": "@CustomerId = 19",
+        "rowsA": 1,
+        "rowsB": 1,
+        "rowsAVaries": false,
+        "rowsBVaries": false
+      },
+      {
+        "caseKey": "synthetic-case-1",
+        "labelA": "@CustomerId = 2",
+        "labelB": "@CustomerId = 2",
+        "rowsA": 1,
+        "rowsB": 1,
+        "rowsAVaries": false,
+        "rowsBVaries": false
+      },
+      {
+        "caseKey": "synthetic-case-19",
+        "labelA": "@CustomerId = 20",
+        "labelB": "@CustomerId = 20",
+        "rowsA": 1,
+        "rowsB": 1,
+        "rowsAVaries": false,
+        "rowsBVaries": false
+      },
+      {
+        "caseKey": "synthetic-case-2",
+        "labelA": "@CustomerId = 3",
+        "labelB": "@CustomerId = 3",
+        "rowsA": 1,
+        "rowsB": 1,
+        "rowsAVaries": false,
+        "rowsBVaries": false
+      },
+      {
+        "caseKey": "synthetic-case-3",
+        "labelA": "@CustomerId = 4",
+        "labelB": "@CustomerId = 4",
+        "rowsA": 1,
+        "rowsB": 1,
+        "rowsAVaries": false,
+        "rowsBVaries": false
+      },
+      {
+        "caseKey": "synthetic-case-4",
+        "labelA": "@CustomerId = 5",
+        "labelB": "@CustomerId = 5",
+        "rowsA": 1,
+        "rowsB": 1,
+        "rowsAVaries": false,
+        "rowsBVaries": false
+      },
+      {
+        "caseKey": "synthetic-case-5",
+        "labelA": "@CustomerId = 6",
+        "labelB": "@CustomerId = 6",
+        "rowsA": 1,
+        "rowsB": 1,
+        "rowsAVaries": false,
+        "rowsBVaries": false
+      },
+      {
+        "caseKey": "synthetic-case-6",
+        "labelA": "@CustomerId = 7",
+        "labelB": "@CustomerId = 7",
+        "rowsA": 1,
+        "rowsB": 1,
+        "rowsAVaries": false,
+        "rowsBVaries": false
+      },
+      {
+        "caseKey": "synthetic-case-7",
+        "labelA": "@CustomerId = 8",
+        "labelB": "@CustomerId = 8",
+        "rowsA": 1,
+        "rowsB": 1,
+        "rowsAVaries": false,
+        "rowsBVaries": false
+      },
+      {
+        "caseKey": "synthetic-case-8",
+        "labelA": "@CustomerId = 9",
+        "labelB": "@CustomerId = 9",
+        "rowsA": 1,
+        "rowsB": 1,
+        "rowsAVaries": false,
+        "rowsBVaries": false
+      }
+    ],
+    "versionLabelsProvisional": false,
+    "versionLabelNote": null,
+    "verdictBasis": "whole batch",
+    "view": "whole",
+    "wholeBatch": {
+      "before": 7144,
+      "after": 6805,
+      "shared": null,
+      "label": "whole batch: 7144 → 6805 reads",
+      "sharedBefore": null,
+      "sharedAfter": null,
+      "changedBefore": null,
+      "changedAfter": null
+    },
+    "statements": [
+      {
+        "key": "orders-select",
+        "text": "SELECT @CustomerId AS CustomerId;",
+        "status": "different-work",
+        "readsBefore": null,
+        "readsAfter": null,
+        "scansBefore": null,
+        "scansAfter": null,
+        "executions": 1,
+        "change": "—",
+        "attribution": "partial",
+        "hiddenWork": [],
+        "objects": [
+          {
+            "table": "Orders",
+            "scansBefore": null,
+            "scansAfter": null,
+            "readsBefore": null,
+            "readsAfter": null,
+            "change": "—",
+            "lobLogicalReadsBefore": null,
+            "lobLogicalReadsAfter": null,
+            "dataLogicalReadsBefore": null,
+            "dataLogicalReadsAfter": null,
+            "physicalReadsBefore": null,
+            "physicalReadsAfter": null,
+            "readAheadReadsBefore": null,
+            "readAheadReadsAfter": null,
+            "lobPhysicalReadsBefore": null,
+            "lobPhysicalReadsAfter": null,
+            "lobReadAheadReadsBefore": null,
+            "lobReadAheadReadsAfter": null
+          }
+        ],
+        "cpuBeforeMs": null,
+        "cpuAfterMs": null,
+        "elapsedBeforeMs": null,
+        "elapsedAfterMs": null,
+        "grantRequestedKbBefore": null,
+        "grantRequestedKbAfter": null,
+        "grantGrantedKbBefore": null,
+        "grantGrantedKbAfter": null,
+        "grantMaxUsedKbBefore": null,
+        "grantMaxUsedKbAfter": null,
+        "hasSpillWarningBefore": null,
+        "hasSpillWarningAfter": null,
+        "planRepetitionBefore": null,
+        "planRepetitionAfter": null,
+        "occurrence": 1,
+        "planHashBefore": null,
+        "planHashAfter": null,
+        "planLinkBefore": null,
+        "planLinkAfter": null,
+        "udfElapsedMilliseconds": null,
+        "metricAvailabilityBefore": {
+          "logicalReads": {
+            "status": "unavailable",
+            "reason": "Ambiguous statement attribution.",
+            "contributingCases": 0,
+            "selectedCases": 20
+          },
+          "scans": {
+            "status": "unavailable",
+            "reason": "Ambiguous statement attribution.",
+            "contributingCases": 0,
+            "selectedCases": 20
+          },
+          "lobLogicalReads": {
+            "status": "unavailable",
+            "reason": "Select a single case for this metric.",
+            "contributingCases": 0,
+            "selectedCases": 20
+          },
+          "cpuMs": {
+            "status": "unavailable",
+            "reason": "Select a single case for this metric.",
+            "contributingCases": 0,
+            "selectedCases": 20
+          },
+          "elapsedMs": {
+            "status": "unavailable",
+            "reason": "Select a single case for this metric.",
+            "contributingCases": 0,
+            "selectedCases": 20
+          },
+          "grantRequestedKb": {
+            "status": "unavailable",
+            "reason": "Select a single case for this metric.",
+            "contributingCases": 0,
+            "selectedCases": 20
+          },
+          "grantGrantedKb": {
+            "status": "unavailable",
+            "reason": "Select a single case for this metric.",
+            "contributingCases": 0,
+            "selectedCases": 20
+          },
+          "grantMaxUsedKb": {
+            "status": "unavailable",
+            "reason": "Select a single case for this metric.",
+            "contributingCases": 0,
+            "selectedCases": 20
+          },
+          "hasSpillWarning": {
+            "status": "unavailable",
+            "reason": "Select a single case for this metric.",
+            "contributingCases": 0,
+            "selectedCases": 20
+          }
+        },
+        "metricAvailabilityAfter": {
+          "logicalReads": {
+            "status": "unavailable",
+            "reason": "Ambiguous statement attribution.",
+            "contributingCases": 0,
+            "selectedCases": 20
+          },
+          "scans": {
+            "status": "unavailable",
+            "reason": "Ambiguous statement attribution.",
+            "contributingCases": 0,
+            "selectedCases": 20
+          },
+          "lobLogicalReads": {
+            "status": "unavailable",
+            "reason": "Select a single case for this metric.",
+            "contributingCases": 0,
+            "selectedCases": 20
+          },
+          "cpuMs": {
+            "status": "unavailable",
+            "reason": "Select a single case for this metric.",
+            "contributingCases": 0,
+            "selectedCases": 20
+          },
+          "elapsedMs": {
+            "status": "unavailable",
+            "reason": "Select a single case for this metric.",
+            "contributingCases": 0,
+            "selectedCases": 20
+          },
+          "grantRequestedKb": {
+            "status": "unavailable",
+            "reason": "Select a single case for this metric.",
+            "contributingCases": 0,
+            "selectedCases": 20
+          },
+          "grantGrantedKb": {
+            "status": "unavailable",
+            "reason": "Select a single case for this metric.",
+            "contributingCases": 0,
+            "selectedCases": 20
+          },
+          "grantMaxUsedKb": {
+            "status": "unavailable",
+            "reason": "Select a single case for this metric.",
+            "contributingCases": 0,
+            "selectedCases": 20
+          },
+          "hasSpillWarning": {
+            "status": "unavailable",
+            "reason": "Select a single case for this metric.",
+            "contributingCases": 0,
+            "selectedCases": 20
+          }
+        }
+      }
+    ],
+    "fallbackNote": "per-statement attribution incomplete",
+    "statementMetricsUnavailableReason": "Select a single case for statement CPU, elapsed, LOB logical reads, grants and spill warnings.",
+    "omittedStatementsBefore": 1,
+    "omittedStatementsAfter": 1,
+    "beforeAction": {
+      "operationId": 10000,
+      "side": "baseline",
+      "caseIds": [
+        "0",
+        "1",
+        "10",
+        "11",
+        "12",
+        "13",
+        "14",
+        "15",
+        "16",
+        "17",
+        "18",
+        "19",
+        "2",
+        "3",
+        "4",
+        "5",
+        "6",
+        "7",
+        "8",
+        "9"
+      ],
+      "caseIdsByFingerprint": {
+        "synthetic-case-0": "0",
+        "synthetic-case-1": "1",
+        "synthetic-case-2": "2",
+        "synthetic-case-3": "3",
+        "synthetic-case-4": "4",
+        "synthetic-case-5": "5",
+        "synthetic-case-6": "6",
+        "synthetic-case-7": "7",
+        "synthetic-case-8": "8",
+        "synthetic-case-9": "9",
+        "synthetic-case-10": "10",
+        "synthetic-case-11": "11",
+        "synthetic-case-12": "12",
+        "synthetic-case-13": "13",
+        "synthetic-case-14": "14",
+        "synthetic-case-15": "15",
+        "synthetic-case-16": "16",
+        "synthetic-case-17": "17",
+        "synthetic-case-18": "18",
+        "synthetic-case-19": "19"
+      }
+    },
+    "afterAction": {
+      "operationId": 10000,
+      "side": "candidate",
+      "caseIds": [
+        "0",
+        "1",
+        "10",
+        "11",
+        "12",
+        "13",
+        "14",
+        "15",
+        "16",
+        "17",
+        "18",
+        "19",
+        "2",
+        "3",
+        "4",
+        "5",
+        "6",
+        "7",
+        "8",
+        "9"
+      ],
+      "caseIdsByFingerprint": {
+        "synthetic-case-0": "0",
+        "synthetic-case-1": "1",
+        "synthetic-case-2": "2",
+        "synthetic-case-3": "3",
+        "synthetic-case-4": "4",
+        "synthetic-case-5": "5",
+        "synthetic-case-6": "6",
+        "synthetic-case-7": "7",
+        "synthetic-case-8": "8",
+        "synthetic-case-9": "9",
+        "synthetic-case-10": "10",
+        "synthetic-case-11": "11",
+        "synthetic-case-12": "12",
+        "synthetic-case-13": "13",
+        "synthetic-case-14": "14",
+        "synthetic-case-15": "15",
+        "synthetic-case-16": "16",
+        "synthetic-case-17": "17",
+        "synthetic-case-18": "18",
+        "synthetic-case-19": "19"
+      }
+    },
+    "tableIoUnavailable": false,
+    "cpuBeforeMs": 100,
+    "cpuAfterMs": 100,
+    "scansBefore": 20,
+    "scansAfter": 20,
+    "buffersBefore": null,
+    "buffersAfter": null,
+    "outcomes": {
+      "resultsEquivalent": 20,
+      "resultsDifferent": 0,
+      "resultsUnavailable": 0,
+      "ioBetter": 19,
+      "ioSame": 1,
+      "ioWorse": 0,
+      "ioUnavailable": 0,
+      "policyPass": 19,
+      "policyFail": 1,
+      "policyUnavailable": 0
+    },
+    "caseOutcomes": [
+      {
+        "caseKey": "synthetic-case-0",
+        "label": "@CustomerId = 1",
+        "resultsEquivalent": true,
+        "ioOutcome": "better",
+        "policyVerdict": "fail",
+        "policyUnavailableReason": null,
+        "policyReasons": [
+          "elapsed-regressed"
+        ],
+        "readsBefore": 341,
+        "readsAfter": 324,
+        "elapsedBeforeMs": 10,
+        "elapsedAfterMs": 30,
+        "cpuBeforeMs": 5,
+        "cpuAfterMs": 5,
+        "caseCount": 1
+      },
+      {
+        "caseKey": "synthetic-case-1",
+        "label": "@CustomerId = 2",
+        "resultsEquivalent": true,
+        "ioOutcome": "better",
+        "policyVerdict": "pass",
+        "policyUnavailableReason": null,
+        "policyReasons": [],
+        "readsBefore": 343,
+        "readsAfter": 326,
+        "elapsedBeforeMs": 10,
+        "elapsedAfterMs": 10,
+        "cpuBeforeMs": 5,
+        "cpuAfterMs": 5,
+        "caseCount": 1
+      },
+      {
+        "caseKey": "synthetic-case-2",
+        "label": "@CustomerId = 3",
+        "resultsEquivalent": true,
+        "ioOutcome": "better",
+        "policyVerdict": "pass",
+        "policyUnavailableReason": null,
+        "policyReasons": [],
+        "readsBefore": 344,
+        "readsAfter": 327,
+        "elapsedBeforeMs": 10,
+        "elapsedAfterMs": 10,
+        "cpuBeforeMs": 5,
+        "cpuAfterMs": 5,
+        "caseCount": 1
+      },
+      {
+        "caseKey": "synthetic-case-3",
+        "label": "@CustomerId = 4",
+        "resultsEquivalent": true,
+        "ioOutcome": "same",
+        "policyVerdict": "pass",
+        "policyUnavailableReason": null,
+        "policyReasons": [],
+        "readsBefore": 346,
+        "readsAfter": 346,
+        "elapsedBeforeMs": 10,
+        "elapsedAfterMs": 10,
+        "cpuBeforeMs": 5,
+        "cpuAfterMs": 5,
+        "caseCount": 1
+      },
+      {
+        "caseKey": "synthetic-case-4",
+        "label": "@CustomerId = 5",
+        "resultsEquivalent": true,
+        "ioOutcome": "better",
+        "policyVerdict": "pass",
+        "policyUnavailableReason": null,
+        "policyReasons": [],
+        "readsBefore": 348,
+        "readsAfter": 331,
+        "elapsedBeforeMs": 10,
+        "elapsedAfterMs": 10,
+        "cpuBeforeMs": 5,
+        "cpuAfterMs": 5,
+        "caseCount": 1
+      },
+      {
+        "caseKey": "synthetic-case-5",
+        "label": "@CustomerId = 6",
+        "resultsEquivalent": true,
+        "ioOutcome": "better",
+        "policyVerdict": "pass",
+        "policyUnavailableReason": null,
+        "policyReasons": [],
+        "readsBefore": 350,
+        "readsAfter": 333,
+        "elapsedBeforeMs": 10,
+        "elapsedAfterMs": 10,
+        "cpuBeforeMs": 5,
+        "cpuAfterMs": 5,
+        "caseCount": 1
+      },
+      {
+        "caseKey": "synthetic-case-6",
+        "label": "@CustomerId = 7",
+        "resultsEquivalent": true,
+        "ioOutcome": "better",
+        "policyVerdict": "pass",
+        "policyUnavailableReason": null,
+        "policyReasons": [],
+        "readsBefore": 351,
+        "readsAfter": 333,
+        "elapsedBeforeMs": 10,
+        "elapsedAfterMs": 10,
+        "cpuBeforeMs": 5,
+        "cpuAfterMs": 5,
+        "caseCount": 1
+      },
+      {
+        "caseKey": "synthetic-case-7",
+        "label": "@CustomerId = 8",
+        "resultsEquivalent": true,
+        "ioOutcome": "better",
+        "policyVerdict": "pass",
+        "policyUnavailableReason": null,
+        "policyReasons": [],
+        "readsBefore": 353,
+        "readsAfter": 335,
+        "elapsedBeforeMs": 10,
+        "elapsedAfterMs": 10,
+        "cpuBeforeMs": 5,
+        "cpuAfterMs": 5,
+        "caseCount": 1
+      },
+      {
+        "caseKey": "synthetic-case-8",
+        "label": "@CustomerId = 9",
+        "resultsEquivalent": true,
+        "ioOutcome": "better",
+        "policyVerdict": "pass",
+        "policyUnavailableReason": null,
+        "policyReasons": [],
+        "readsBefore": 355,
+        "readsAfter": 337,
+        "elapsedBeforeMs": 10,
+        "elapsedAfterMs": 10,
+        "cpuBeforeMs": 5,
+        "cpuAfterMs": 5,
+        "caseCount": 1
+      },
+      {
+        "caseKey": "synthetic-case-9",
+        "label": "@CustomerId = 10",
+        "resultsEquivalent": true,
+        "ioOutcome": "better",
+        "policyVerdict": "pass",
+        "policyUnavailableReason": null,
+        "policyReasons": [],
+        "readsBefore": 356,
+        "readsAfter": 338,
+        "elapsedBeforeMs": 10,
+        "elapsedAfterMs": 10,
+        "cpuBeforeMs": 5,
+        "cpuAfterMs": 5,
+        "caseCount": 1
+      },
+      {
+        "caseKey": "synthetic-case-10",
+        "label": "@CustomerId = 11",
+        "resultsEquivalent": true,
+        "ioOutcome": "better",
+        "policyVerdict": "pass",
+        "policyUnavailableReason": null,
+        "policyReasons": [],
+        "readsBefore": 358,
+        "readsAfter": 340,
+        "elapsedBeforeMs": 10,
+        "elapsedAfterMs": 10,
+        "cpuBeforeMs": 5,
+        "cpuAfterMs": 5,
+        "caseCount": 1
+      },
+      {
+        "caseKey": "synthetic-case-11",
+        "label": "@CustomerId = 12",
+        "resultsEquivalent": true,
+        "ioOutcome": "better",
+        "policyVerdict": "pass",
+        "policyUnavailableReason": null,
+        "policyReasons": [],
+        "readsBefore": 360,
+        "readsAfter": 342,
+        "elapsedBeforeMs": 10,
+        "elapsedAfterMs": 10,
+        "cpuBeforeMs": 5,
+        "cpuAfterMs": 5,
+        "caseCount": 1
+      },
+      {
+        "caseKey": "synthetic-case-12",
+        "label": "@CustomerId = 13",
+        "resultsEquivalent": true,
+        "ioOutcome": "better",
+        "policyVerdict": "pass",
+        "policyUnavailableReason": null,
+        "policyReasons": [],
+        "readsBefore": 361,
+        "readsAfter": 343,
+        "elapsedBeforeMs": 10,
+        "elapsedAfterMs": 10,
+        "cpuBeforeMs": 5,
+        "cpuAfterMs": 5,
+        "caseCount": 1
+      },
+      {
+        "caseKey": "synthetic-case-13",
+        "label": "@CustomerId = 14",
+        "resultsEquivalent": true,
+        "ioOutcome": "better",
+        "policyVerdict": "pass",
+        "policyUnavailableReason": null,
+        "policyReasons": [],
+        "readsBefore": 363,
+        "readsAfter": 345,
+        "elapsedBeforeMs": 10,
+        "elapsedAfterMs": 10,
+        "cpuBeforeMs": 5,
+        "cpuAfterMs": 5,
+        "caseCount": 1
+      },
+      {
+        "caseKey": "synthetic-case-14",
+        "label": "@CustomerId = 15",
+        "resultsEquivalent": true,
+        "ioOutcome": "better",
+        "policyVerdict": "pass",
+        "policyUnavailableReason": null,
+        "policyReasons": [],
+        "readsBefore": 365,
+        "readsAfter": 347,
+        "elapsedBeforeMs": 10,
+        "elapsedAfterMs": 10,
+        "cpuBeforeMs": 5,
+        "cpuAfterMs": 5,
+        "caseCount": 1
+      },
+      {
+        "caseKey": "synthetic-case-15",
+        "label": "@CustomerId = 16",
+        "resultsEquivalent": true,
+        "ioOutcome": "better",
+        "policyVerdict": "pass",
+        "policyUnavailableReason": null,
+        "policyReasons": [],
+        "readsBefore": 367,
+        "readsAfter": 349,
+        "elapsedBeforeMs": 10,
+        "elapsedAfterMs": 10,
+        "cpuBeforeMs": 5,
+        "cpuAfterMs": 5,
+        "caseCount": 1
+      },
+      {
+        "caseKey": "synthetic-case-16",
+        "label": "@CustomerId = 17",
+        "resultsEquivalent": true,
+        "ioOutcome": "better",
+        "policyVerdict": "pass",
+        "policyUnavailableReason": null,
+        "policyReasons": [],
+        "readsBefore": 368,
+        "readsAfter": 350,
+        "elapsedBeforeMs": 10,
+        "elapsedAfterMs": 10,
+        "cpuBeforeMs": 5,
+        "cpuAfterMs": 5,
+        "caseCount": 1
+      },
+      {
+        "caseKey": "synthetic-case-17",
+        "label": "@CustomerId = 18",
+        "resultsEquivalent": true,
+        "ioOutcome": "better",
+        "policyVerdict": "pass",
+        "policyUnavailableReason": null,
+        "policyReasons": [],
+        "readsBefore": 370,
+        "readsAfter": 352,
+        "elapsedBeforeMs": 10,
+        "elapsedAfterMs": 10,
+        "cpuBeforeMs": 5,
+        "cpuAfterMs": 5,
+        "caseCount": 1
+      },
+      {
+        "caseKey": "synthetic-case-18",
+        "label": "@CustomerId = 19",
+        "resultsEquivalent": true,
+        "ioOutcome": "better",
+        "policyVerdict": "pass",
+        "policyUnavailableReason": null,
+        "policyReasons": [],
+        "readsBefore": 372,
+        "readsAfter": 353,
+        "elapsedBeforeMs": 10,
+        "elapsedAfterMs": 10,
+        "cpuBeforeMs": 5,
+        "cpuAfterMs": 5,
+        "caseCount": 1
+      },
+      {
+        "caseKey": "synthetic-case-19",
+        "label": "@CustomerId = 20",
+        "resultsEquivalent": true,
+        "ioOutcome": "better",
+        "policyVerdict": "pass",
+        "policyUnavailableReason": null,
+        "policyReasons": [],
+        "readsBefore": 373,
+        "readsAfter": 354,
+        "elapsedBeforeMs": 10,
+        "elapsedAfterMs": 10,
+        "cpuBeforeMs": 5,
+        "cpuAfterMs": 5,
+        "caseCount": 1
+      }
+    ]
+  },
+  "selected": {
+    "a": "v48",
+    "b": "v49",
+    "basis": "MeasuredTogether",
+    "operationId": 10000,
+    "equivalenceLabel": "results equivalent (direct)",
+    "cases": [
+      {
+        "id": "synthetic-case-0",
+        "label": "@CustomerId = 1",
+        "outcome": "better"
+      },
+      {
+        "id": "synthetic-case-9",
+        "label": "@CustomerId = 10",
+        "outcome": "better"
+      },
+      {
+        "id": "synthetic-case-10",
+        "label": "@CustomerId = 11",
+        "outcome": "better"
+      },
+      {
+        "id": "synthetic-case-11",
+        "label": "@CustomerId = 12",
+        "outcome": "better"
+      },
+      {
+        "id": "synthetic-case-12",
+        "label": "@CustomerId = 13",
+        "outcome": "better"
+      },
+      {
+        "id": "synthetic-case-13",
+        "label": "@CustomerId = 14",
+        "outcome": "better"
+      },
+      {
+        "id": "synthetic-case-14",
+        "label": "@CustomerId = 15",
+        "outcome": "better"
+      },
+      {
+        "id": "synthetic-case-15",
+        "label": "@CustomerId = 16",
+        "outcome": "better"
+      },
+      {
+        "id": "synthetic-case-16",
+        "label": "@CustomerId = 17",
+        "outcome": "better"
+      },
+      {
+        "id": "synthetic-case-17",
+        "label": "@CustomerId = 18",
+        "outcome": "better"
+      },
+      {
+        "id": "synthetic-case-18",
+        "label": "@CustomerId = 19",
+        "outcome": "better"
+      },
+      {
+        "id": "synthetic-case-1",
+        "label": "@CustomerId = 2",
+        "outcome": "better"
+      },
+      {
+        "id": "synthetic-case-19",
+        "label": "@CustomerId = 20",
+        "outcome": "better"
+      },
+      {
+        "id": "synthetic-case-2",
+        "label": "@CustomerId = 3",
+        "outcome": "better"
+      },
+      {
+        "id": "synthetic-case-3",
+        "label": "@CustomerId = 4",
+        "outcome": "same"
+      },
+      {
+        "id": "synthetic-case-4",
+        "label": "@CustomerId = 5",
+        "outcome": "better"
+      },
+      {
+        "id": "synthetic-case-5",
+        "label": "@CustomerId = 6",
+        "outcome": "better"
+      },
+      {
+        "id": "synthetic-case-6",
+        "label": "@CustomerId = 7",
+        "outcome": "better"
+      },
+      {
+        "id": "synthetic-case-7",
+        "label": "@CustomerId = 8",
+        "outcome": "better"
+      },
+      {
+        "id": "synthetic-case-8",
+        "label": "@CustomerId = 9",
+        "outcome": "better"
+      }
+    ],
+    "selectedCase": "synthetic-case-0",
+    "aggregate": "sum",
+    "coverageLabel": "",
+    "mixed": null,
+    "tables": [
+      {
+        "table": "Orders",
+        "scansBefore": 1,
+        "scansAfter": 1,
+        "readsBefore": 341,
+        "readsAfter": 324,
+        "change": "−5%",
+        "lobLogicalReadsBefore": 0,
+        "lobLogicalReadsAfter": 0,
+        "dataLogicalReadsBefore": 341,
+        "dataLogicalReadsAfter": 324,
+        "physicalReadsBefore": 0,
+        "physicalReadsAfter": 0,
+        "readAheadReadsBefore": 0,
+        "readAheadReadsAfter": 0,
+        "lobPhysicalReadsBefore": 0,
+        "lobPhysicalReadsAfter": 0,
+        "lobReadAheadReadsBefore": 0,
+        "lobReadAheadReadsAfter": 0
+      }
+    ],
+    "collapsed": null,
+    "elapsed": {
+      "beforeMs": 10,
+      "afterMs": 30,
+      "policyVerdict": "fail",
+      "differentRun": false
+    },
+    "groupA": null,
+    "groupB": null,
+    "groupLabelA": null,
+    "groupLabelB": null,
+    "caseRows": [
+      {
+        "caseKey": "synthetic-case-0",
+        "labelA": "@CustomerId = 1",
+        "labelB": "@CustomerId = 1",
+        "rowsA": 1,
+        "rowsB": 1,
+        "rowsAVaries": false,
+        "rowsBVaries": false
+      },
+      {
+        "caseKey": "synthetic-case-9",
+        "labelA": "@CustomerId = 10",
+        "labelB": "@CustomerId = 10",
+        "rowsA": 1,
+        "rowsB": 1,
+        "rowsAVaries": false,
+        "rowsBVaries": false
+      },
+      {
+        "caseKey": "synthetic-case-10",
+        "labelA": "@CustomerId = 11",
+        "labelB": "@CustomerId = 11",
+        "rowsA": 1,
+        "rowsB": 1,
+        "rowsAVaries": false,
+        "rowsBVaries": false
+      },
+      {
+        "caseKey": "synthetic-case-11",
+        "labelA": "@CustomerId = 12",
+        "labelB": "@CustomerId = 12",
+        "rowsA": 1,
+        "rowsB": 1,
+        "rowsAVaries": false,
+        "rowsBVaries": false
+      },
+      {
+        "caseKey": "synthetic-case-12",
+        "labelA": "@CustomerId = 13",
+        "labelB": "@CustomerId = 13",
+        "rowsA": 1,
+        "rowsB": 1,
+        "rowsAVaries": false,
+        "rowsBVaries": false
+      },
+      {
+        "caseKey": "synthetic-case-13",
+        "labelA": "@CustomerId = 14",
+        "labelB": "@CustomerId = 14",
+        "rowsA": 1,
+        "rowsB": 1,
+        "rowsAVaries": false,
+        "rowsBVaries": false
+      },
+      {
+        "caseKey": "synthetic-case-14",
+        "labelA": "@CustomerId = 15",
+        "labelB": "@CustomerId = 15",
+        "rowsA": 1,
+        "rowsB": 1,
+        "rowsAVaries": false,
+        "rowsBVaries": false
+      },
+      {
+        "caseKey": "synthetic-case-15",
+        "labelA": "@CustomerId = 16",
+        "labelB": "@CustomerId = 16",
+        "rowsA": 1,
+        "rowsB": 1,
+        "rowsAVaries": false,
+        "rowsBVaries": false
+      },
+      {
+        "caseKey": "synthetic-case-16",
+        "labelA": "@CustomerId = 17",
+        "labelB": "@CustomerId = 17",
+        "rowsA": 1,
+        "rowsB": 1,
+        "rowsAVaries": false,
+        "rowsBVaries": false
+      },
+      {
+        "caseKey": "synthetic-case-17",
+        "labelA": "@CustomerId = 18",
+        "labelB": "@CustomerId = 18",
+        "rowsA": 1,
+        "rowsB": 1,
+        "rowsAVaries": false,
+        "rowsBVaries": false
+      },
+      {
+        "caseKey": "synthetic-case-18",
+        "labelA": "@CustomerId = 19",
+        "labelB": "@CustomerId = 19",
+        "rowsA": 1,
+        "rowsB": 1,
+        "rowsAVaries": false,
+        "rowsBVaries": false
+      },
+      {
+        "caseKey": "synthetic-case-1",
+        "labelA": "@CustomerId = 2",
+        "labelB": "@CustomerId = 2",
+        "rowsA": 1,
+        "rowsB": 1,
+        "rowsAVaries": false,
+        "rowsBVaries": false
+      },
+      {
+        "caseKey": "synthetic-case-19",
+        "labelA": "@CustomerId = 20",
+        "labelB": "@CustomerId = 20",
+        "rowsA": 1,
+        "rowsB": 1,
+        "rowsAVaries": false,
+        "rowsBVaries": false
+      },
+      {
+        "caseKey": "synthetic-case-2",
+        "labelA": "@CustomerId = 3",
+        "labelB": "@CustomerId = 3",
+        "rowsA": 1,
+        "rowsB": 1,
+        "rowsAVaries": false,
+        "rowsBVaries": false
+      },
+      {
+        "caseKey": "synthetic-case-3",
+        "labelA": "@CustomerId = 4",
+        "labelB": "@CustomerId = 4",
+        "rowsA": 1,
+        "rowsB": 1,
+        "rowsAVaries": false,
+        "rowsBVaries": false
+      },
+      {
+        "caseKey": "synthetic-case-4",
+        "labelA": "@CustomerId = 5",
+        "labelB": "@CustomerId = 5",
+        "rowsA": 1,
+        "rowsB": 1,
+        "rowsAVaries": false,
+        "rowsBVaries": false
+      },
+      {
+        "caseKey": "synthetic-case-5",
+        "labelA": "@CustomerId = 6",
+        "labelB": "@CustomerId = 6",
+        "rowsA": 1,
+        "rowsB": 1,
+        "rowsAVaries": false,
+        "rowsBVaries": false
+      },
+      {
+        "caseKey": "synthetic-case-6",
+        "labelA": "@CustomerId = 7",
+        "labelB": "@CustomerId = 7",
+        "rowsA": 1,
+        "rowsB": 1,
+        "rowsAVaries": false,
+        "rowsBVaries": false
+      },
+      {
+        "caseKey": "synthetic-case-7",
+        "labelA": "@CustomerId = 8",
+        "labelB": "@CustomerId = 8",
+        "rowsA": 1,
+        "rowsB": 1,
+        "rowsAVaries": false,
+        "rowsBVaries": false
+      },
+      {
+        "caseKey": "synthetic-case-8",
+        "labelA": "@CustomerId = 9",
+        "labelB": "@CustomerId = 9",
+        "rowsA": 1,
+        "rowsB": 1,
+        "rowsAVaries": false,
+        "rowsBVaries": false
+      }
+    ],
+    "versionLabelsProvisional": false,
+    "versionLabelNote": null,
+    "verdictBasis": "whole batch",
+    "view": "whole",
+    "wholeBatch": {
+      "before": 341,
+      "after": 324,
+      "shared": null,
+      "label": "whole batch: 341 → 324 reads",
+      "sharedBefore": null,
+      "sharedAfter": null,
+      "changedBefore": null,
+      "changedAfter": null
+    },
+    "statements": [
+      {
+        "key": "orders-select",
+        "text": "SELECT @CustomerId AS CustomerId;",
+        "status": "different-work",
+        "readsBefore": null,
+        "readsAfter": null,
+        "scansBefore": null,
+        "scansAfter": null,
+        "executions": 1,
+        "change": "—",
+        "attribution": "partial",
+        "hiddenWork": [],
+        "objects": [
+          {
+            "table": "Orders",
+            "scansBefore": null,
+            "scansAfter": null,
+            "readsBefore": null,
+            "readsAfter": null,
+            "change": "—",
+            "lobLogicalReadsBefore": null,
+            "lobLogicalReadsAfter": null,
+            "dataLogicalReadsBefore": null,
+            "dataLogicalReadsAfter": null,
+            "physicalReadsBefore": null,
+            "physicalReadsAfter": null,
+            "readAheadReadsBefore": null,
+            "readAheadReadsAfter": null,
+            "lobPhysicalReadsBefore": null,
+            "lobPhysicalReadsAfter": null,
+            "lobReadAheadReadsBefore": null,
+            "lobReadAheadReadsAfter": null
+          }
+        ],
+        "cpuBeforeMs": null,
+        "cpuAfterMs": null,
+        "elapsedBeforeMs": null,
+        "elapsedAfterMs": null,
+        "grantRequestedKbBefore": null,
+        "grantRequestedKbAfter": null,
+        "grantGrantedKbBefore": null,
+        "grantGrantedKbAfter": null,
+        "grantMaxUsedKbBefore": null,
+        "grantMaxUsedKbAfter": null,
+        "hasSpillWarningBefore": null,
+        "hasSpillWarningAfter": null,
+        "planRepetitionBefore": null,
+        "planRepetitionAfter": null,
+        "occurrence": 1,
+        "planHashBefore": null,
+        "planHashAfter": null,
+        "planLinkBefore": null,
+        "planLinkAfter": null,
+        "udfElapsedMilliseconds": null,
+        "metricAvailabilityBefore": {
+          "logicalReads": {
+            "status": "unavailable",
+            "reason": "Ambiguous statement attribution.",
+            "contributingCases": 0,
+            "selectedCases": 1
+          },
+          "scans": {
+            "status": "unavailable",
+            "reason": "Ambiguous statement attribution.",
+            "contributingCases": 0,
+            "selectedCases": 1
+          },
+          "lobLogicalReads": {
+            "status": "unavailable",
+            "reason": "Ambiguous statement attribution.",
+            "contributingCases": 0,
+            "selectedCases": 1
+          },
+          "cpuMs": {
+            "status": "unavailable",
+            "reason": "Ambiguous statement attribution.",
+            "contributingCases": 0,
+            "selectedCases": 1
+          },
+          "elapsedMs": {
+            "status": "unavailable",
+            "reason": "Ambiguous statement attribution.",
+            "contributingCases": 0,
+            "selectedCases": 1
+          },
+          "grantRequestedKb": {
+            "status": "unavailable",
+            "reason": "Ambiguous statement attribution.",
+            "contributingCases": 0,
+            "selectedCases": 1
+          },
+          "grantGrantedKb": {
+            "status": "unavailable",
+            "reason": "Ambiguous statement attribution.",
+            "contributingCases": 0,
+            "selectedCases": 1
+          },
+          "grantMaxUsedKb": {
+            "status": "unavailable",
+            "reason": "Ambiguous statement attribution.",
+            "contributingCases": 0,
+            "selectedCases": 1
+          },
+          "hasSpillWarning": {
+            "status": "unavailable",
+            "reason": "Ambiguous statement attribution.",
+            "contributingCases": 0,
+            "selectedCases": 1
+          }
+        },
+        "metricAvailabilityAfter": {
+          "logicalReads": {
+            "status": "unavailable",
+            "reason": "Ambiguous statement attribution.",
+            "contributingCases": 0,
+            "selectedCases": 1
+          },
+          "scans": {
+            "status": "unavailable",
+            "reason": "Ambiguous statement attribution.",
+            "contributingCases": 0,
+            "selectedCases": 1
+          },
+          "lobLogicalReads": {
+            "status": "unavailable",
+            "reason": "Ambiguous statement attribution.",
+            "contributingCases": 0,
+            "selectedCases": 1
+          },
+          "cpuMs": {
+            "status": "unavailable",
+            "reason": "Ambiguous statement attribution.",
+            "contributingCases": 0,
+            "selectedCases": 1
+          },
+          "elapsedMs": {
+            "status": "unavailable",
+            "reason": "Ambiguous statement attribution.",
+            "contributingCases": 0,
+            "selectedCases": 1
+          },
+          "grantRequestedKb": {
+            "status": "unavailable",
+            "reason": "Ambiguous statement attribution.",
+            "contributingCases": 0,
+            "selectedCases": 1
+          },
+          "grantGrantedKb": {
+            "status": "unavailable",
+            "reason": "Ambiguous statement attribution.",
+            "contributingCases": 0,
+            "selectedCases": 1
+          },
+          "grantMaxUsedKb": {
+            "status": "unavailable",
+            "reason": "Ambiguous statement attribution.",
+            "contributingCases": 0,
+            "selectedCases": 1
+          },
+          "hasSpillWarning": {
+            "status": "unavailable",
+            "reason": "Ambiguous statement attribution.",
+            "contributingCases": 0,
+            "selectedCases": 1
+          }
+        }
+      }
+    ],
+    "fallbackNote": "per-statement attribution incomplete",
+    "statementMetricsUnavailableReason": null,
+    "omittedStatementsBefore": 0,
+    "omittedStatementsAfter": 0,
+    "beforeAction": {
+      "operationId": 10000,
+      "side": "baseline",
+      "caseIds": [
+        "0",
+        "1",
+        "10",
+        "11",
+        "12",
+        "13",
+        "14",
+        "15",
+        "16",
+        "17",
+        "18",
+        "19",
+        "2",
+        "3",
+        "4",
+        "5",
+        "6",
+        "7",
+        "8",
+        "9"
+      ],
+      "caseIdsByFingerprint": {
+        "synthetic-case-0": "0",
+        "synthetic-case-1": "1",
+        "synthetic-case-2": "2",
+        "synthetic-case-3": "3",
+        "synthetic-case-4": "4",
+        "synthetic-case-5": "5",
+        "synthetic-case-6": "6",
+        "synthetic-case-7": "7",
+        "synthetic-case-8": "8",
+        "synthetic-case-9": "9",
+        "synthetic-case-10": "10",
+        "synthetic-case-11": "11",
+        "synthetic-case-12": "12",
+        "synthetic-case-13": "13",
+        "synthetic-case-14": "14",
+        "synthetic-case-15": "15",
+        "synthetic-case-16": "16",
+        "synthetic-case-17": "17",
+        "synthetic-case-18": "18",
+        "synthetic-case-19": "19"
+      }
+    },
+    "afterAction": {
+      "operationId": 10000,
+      "side": "candidate",
+      "caseIds": [
+        "0",
+        "1",
+        "10",
+        "11",
+        "12",
+        "13",
+        "14",
+        "15",
+        "16",
+        "17",
+        "18",
+        "19",
+        "2",
+        "3",
+        "4",
+        "5",
+        "6",
+        "7",
+        "8",
+        "9"
+      ],
+      "caseIdsByFingerprint": {
+        "synthetic-case-0": "0",
+        "synthetic-case-1": "1",
+        "synthetic-case-2": "2",
+        "synthetic-case-3": "3",
+        "synthetic-case-4": "4",
+        "synthetic-case-5": "5",
+        "synthetic-case-6": "6",
+        "synthetic-case-7": "7",
+        "synthetic-case-8": "8",
+        "synthetic-case-9": "9",
+        "synthetic-case-10": "10",
+        "synthetic-case-11": "11",
+        "synthetic-case-12": "12",
+        "synthetic-case-13": "13",
+        "synthetic-case-14": "14",
+        "synthetic-case-15": "15",
+        "synthetic-case-16": "16",
+        "synthetic-case-17": "17",
+        "synthetic-case-18": "18",
+        "synthetic-case-19": "19"
+      }
+    },
+    "tableIoUnavailable": false,
+    "cpuBeforeMs": 5,
+    "cpuAfterMs": 5,
+    "scansBefore": 1,
+    "scansAfter": 1,
+    "buffersBefore": null,
+    "buffersAfter": null,
+    "outcomes": {
+      "resultsEquivalent": 1,
+      "resultsDifferent": 0,
+      "resultsUnavailable": 0,
+      "ioBetter": 1,
+      "ioSame": 0,
+      "ioWorse": 0,
+      "ioUnavailable": 0,
+      "policyPass": 0,
+      "policyFail": 1,
+      "policyUnavailable": 0
+    },
+    "caseOutcomes": [
+      {
+        "caseKey": "synthetic-case-0",
+        "label": "@CustomerId = 1",
+        "resultsEquivalent": true,
+        "ioOutcome": "better",
+        "policyVerdict": "fail",
+        "policyUnavailableReason": null,
+        "policyReasons": [
+          "elapsed-regressed"
+        ],
+        "readsBefore": 341,
+        "readsAfter": 324,
+        "elapsedBeforeMs": 10,
+        "elapsedAfterMs": 30,
+        "cpuBeforeMs": 5,
+        "cpuAfterMs": 5,
+        "caseCount": 1
+      }
+    ]
+  },
+  "mean": {
+    "a": "v48",
+    "b": "v49",
+    "basis": "MeasuredTogether",
+    "operationId": 10000,
+    "equivalenceLabel": "results equivalent (direct)",
+    "cases": [
+      {
+        "id": "synthetic-case-0",
+        "label": "@CustomerId = 1",
+        "outcome": "better"
+      },
+      {
+        "id": "synthetic-case-9",
+        "label": "@CustomerId = 10",
+        "outcome": "better"
+      },
+      {
+        "id": "synthetic-case-10",
+        "label": "@CustomerId = 11",
+        "outcome": "better"
+      },
+      {
+        "id": "synthetic-case-11",
+        "label": "@CustomerId = 12",
+        "outcome": "better"
+      },
+      {
+        "id": "synthetic-case-12",
+        "label": "@CustomerId = 13",
+        "outcome": "better"
+      },
+      {
+        "id": "synthetic-case-13",
+        "label": "@CustomerId = 14",
+        "outcome": "better"
+      },
+      {
+        "id": "synthetic-case-14",
+        "label": "@CustomerId = 15",
+        "outcome": "better"
+      },
+      {
+        "id": "synthetic-case-15",
+        "label": "@CustomerId = 16",
+        "outcome": "better"
+      },
+      {
+        "id": "synthetic-case-16",
+        "label": "@CustomerId = 17",
+        "outcome": "better"
+      },
+      {
+        "id": "synthetic-case-17",
+        "label": "@CustomerId = 18",
+        "outcome": "better"
+      },
+      {
+        "id": "synthetic-case-18",
+        "label": "@CustomerId = 19",
+        "outcome": "better"
+      },
+      {
+        "id": "synthetic-case-1",
+        "label": "@CustomerId = 2",
+        "outcome": "better"
+      },
+      {
+        "id": "synthetic-case-19",
+        "label": "@CustomerId = 20",
+        "outcome": "better"
+      },
+      {
+        "id": "synthetic-case-2",
+        "label": "@CustomerId = 3",
+        "outcome": "better"
+      },
+      {
+        "id": "synthetic-case-3",
+        "label": "@CustomerId = 4",
+        "outcome": "same"
+      },
+      {
+        "id": "synthetic-case-4",
+        "label": "@CustomerId = 5",
+        "outcome": "better"
+      },
+      {
+        "id": "synthetic-case-5",
+        "label": "@CustomerId = 6",
+        "outcome": "better"
+      },
+      {
+        "id": "synthetic-case-6",
+        "label": "@CustomerId = 7",
+        "outcome": "better"
+      },
+      {
+        "id": "synthetic-case-7",
+        "label": "@CustomerId = 8",
+        "outcome": "better"
+      },
+      {
+        "id": "synthetic-case-8",
+        "label": "@CustomerId = 9",
+        "outcome": "better"
+      }
+    ],
+    "selectedCase": "all",
+    "aggregate": "mean",
+    "coverageLabel": "",
+    "mixed": null,
+    "tables": [
+      {
+        "table": "Orders",
+        "scansBefore": 1,
+        "scansAfter": 1,
+        "readsBefore": 357,
+        "readsAfter": 340,
+        "change": "−5%",
+        "lobLogicalReadsBefore": 0,
+        "lobLogicalReadsAfter": 0,
+        "dataLogicalReadsBefore": 357,
+        "dataLogicalReadsAfter": 340,
+        "physicalReadsBefore": 0,
+        "physicalReadsAfter": 0,
+        "readAheadReadsBefore": null,
+        "readAheadReadsAfter": null,
+        "lobPhysicalReadsBefore": 0,
+        "lobPhysicalReadsAfter": 0,
+        "lobReadAheadReadsBefore": 0,
+        "lobReadAheadReadsAfter": 0
+      }
+    ],
+    "collapsed": null,
+    "elapsed": {
+      "beforeMs": 10,
+      "afterMs": 11,
+      "policyVerdict": "fail",
+      "differentRun": false
+    },
+    "groupA": null,
+    "groupB": null,
+    "groupLabelA": null,
+    "groupLabelB": null,
+    "caseRows": [
+      {
+        "caseKey": "synthetic-case-0",
+        "labelA": "@CustomerId = 1",
+        "labelB": "@CustomerId = 1",
+        "rowsA": 1,
+        "rowsB": 1,
+        "rowsAVaries": false,
+        "rowsBVaries": false
+      },
+      {
+        "caseKey": "synthetic-case-9",
+        "labelA": "@CustomerId = 10",
+        "labelB": "@CustomerId = 10",
+        "rowsA": 1,
+        "rowsB": 1,
+        "rowsAVaries": false,
+        "rowsBVaries": false
+      },
+      {
+        "caseKey": "synthetic-case-10",
+        "labelA": "@CustomerId = 11",
+        "labelB": "@CustomerId = 11",
+        "rowsA": 1,
+        "rowsB": 1,
+        "rowsAVaries": false,
+        "rowsBVaries": false
+      },
+      {
+        "caseKey": "synthetic-case-11",
+        "labelA": "@CustomerId = 12",
+        "labelB": "@CustomerId = 12",
+        "rowsA": 1,
+        "rowsB": 1,
+        "rowsAVaries": false,
+        "rowsBVaries": false
+      },
+      {
+        "caseKey": "synthetic-case-12",
+        "labelA": "@CustomerId = 13",
+        "labelB": "@CustomerId = 13",
+        "rowsA": 1,
+        "rowsB": 1,
+        "rowsAVaries": false,
+        "rowsBVaries": false
+      },
+      {
+        "caseKey": "synthetic-case-13",
+        "labelA": "@CustomerId = 14",
+        "labelB": "@CustomerId = 14",
+        "rowsA": 1,
+        "rowsB": 1,
+        "rowsAVaries": false,
+        "rowsBVaries": false
+      },
+      {
+        "caseKey": "synthetic-case-14",
+        "labelA": "@CustomerId = 15",
+        "labelB": "@CustomerId = 15",
+        "rowsA": 1,
+        "rowsB": 1,
+        "rowsAVaries": false,
+        "rowsBVaries": false
+      },
+      {
+        "caseKey": "synthetic-case-15",
+        "labelA": "@CustomerId = 16",
+        "labelB": "@CustomerId = 16",
+        "rowsA": 1,
+        "rowsB": 1,
+        "rowsAVaries": false,
+        "rowsBVaries": false
+      },
+      {
+        "caseKey": "synthetic-case-16",
+        "labelA": "@CustomerId = 17",
+        "labelB": "@CustomerId = 17",
+        "rowsA": 1,
+        "rowsB": 1,
+        "rowsAVaries": false,
+        "rowsBVaries": false
+      },
+      {
+        "caseKey": "synthetic-case-17",
+        "labelA": "@CustomerId = 18",
+        "labelB": "@CustomerId = 18",
+        "rowsA": 1,
+        "rowsB": 1,
+        "rowsAVaries": false,
+        "rowsBVaries": false
+      },
+      {
+        "caseKey": "synthetic-case-18",
+        "labelA": "@CustomerId = 19",
+        "labelB": "@CustomerId = 19",
+        "rowsA": 1,
+        "rowsB": 1,
+        "rowsAVaries": false,
+        "rowsBVaries": false
+      },
+      {
+        "caseKey": "synthetic-case-1",
+        "labelA": "@CustomerId = 2",
+        "labelB": "@CustomerId = 2",
+        "rowsA": 1,
+        "rowsB": 1,
+        "rowsAVaries": false,
+        "rowsBVaries": false
+      },
+      {
+        "caseKey": "synthetic-case-19",
+        "labelA": "@CustomerId = 20",
+        "labelB": "@CustomerId = 20",
+        "rowsA": 1,
+        "rowsB": 1,
+        "rowsAVaries": false,
+        "rowsBVaries": false
+      },
+      {
+        "caseKey": "synthetic-case-2",
+        "labelA": "@CustomerId = 3",
+        "labelB": "@CustomerId = 3",
+        "rowsA": 1,
+        "rowsB": 1,
+        "rowsAVaries": false,
+        "rowsBVaries": false
+      },
+      {
+        "caseKey": "synthetic-case-3",
+        "labelA": "@CustomerId = 4",
+        "labelB": "@CustomerId = 4",
+        "rowsA": 1,
+        "rowsB": 1,
+        "rowsAVaries": false,
+        "rowsBVaries": false
+      },
+      {
+        "caseKey": "synthetic-case-4",
+        "labelA": "@CustomerId = 5",
+        "labelB": "@CustomerId = 5",
+        "rowsA": 1,
+        "rowsB": 1,
+        "rowsAVaries": false,
+        "rowsBVaries": false
+      },
+      {
+        "caseKey": "synthetic-case-5",
+        "labelA": "@CustomerId = 6",
+        "labelB": "@CustomerId = 6",
+        "rowsA": 1,
+        "rowsB": 1,
+        "rowsAVaries": false,
+        "rowsBVaries": false
+      },
+      {
+        "caseKey": "synthetic-case-6",
+        "labelA": "@CustomerId = 7",
+        "labelB": "@CustomerId = 7",
+        "rowsA": 1,
+        "rowsB": 1,
+        "rowsAVaries": false,
+        "rowsBVaries": false
+      },
+      {
+        "caseKey": "synthetic-case-7",
+        "labelA": "@CustomerId = 8",
+        "labelB": "@CustomerId = 8",
+        "rowsA": 1,
+        "rowsB": 1,
+        "rowsAVaries": false,
+        "rowsBVaries": false
+      },
+      {
+        "caseKey": "synthetic-case-8",
+        "labelA": "@CustomerId = 9",
+        "labelB": "@CustomerId = 9",
+        "rowsA": 1,
+        "rowsB": 1,
+        "rowsAVaries": false,
+        "rowsBVaries": false
+      }
+    ],
+    "versionLabelsProvisional": false,
+    "versionLabelNote": null,
+    "verdictBasis": "whole batch",
+    "view": "whole",
+    "wholeBatch": {
+      "before": 357,
+      "after": 340,
+      "shared": null,
+      "label": "whole batch: 357 → 340 reads",
+      "sharedBefore": null,
+      "sharedAfter": null,
+      "changedBefore": null,
+      "changedAfter": null
+    },
+    "statements": [
+      {
+        "key": "orders-select",
+        "text": "SELECT @CustomerId AS CustomerId;",
+        "status": "different-work",
+        "readsBefore": null,
+        "readsAfter": null,
+        "scansBefore": null,
+        "scansAfter": null,
+        "executions": 1,
+        "change": "—",
+        "attribution": "partial",
+        "hiddenWork": [],
+        "objects": [
+          {
+            "table": "Orders",
+            "scansBefore": null,
+            "scansAfter": null,
+            "readsBefore": null,
+            "readsAfter": null,
+            "change": "—",
+            "lobLogicalReadsBefore": null,
+            "lobLogicalReadsAfter": null,
+            "dataLogicalReadsBefore": null,
+            "dataLogicalReadsAfter": null,
+            "physicalReadsBefore": null,
+            "physicalReadsAfter": null,
+            "readAheadReadsBefore": null,
+            "readAheadReadsAfter": null,
+            "lobPhysicalReadsBefore": null,
+            "lobPhysicalReadsAfter": null,
+            "lobReadAheadReadsBefore": null,
+            "lobReadAheadReadsAfter": null
+          }
+        ],
+        "cpuBeforeMs": null,
+        "cpuAfterMs": null,
+        "elapsedBeforeMs": null,
+        "elapsedAfterMs": null,
+        "grantRequestedKbBefore": null,
+        "grantRequestedKbAfter": null,
+        "grantGrantedKbBefore": null,
+        "grantGrantedKbAfter": null,
+        "grantMaxUsedKbBefore": null,
+        "grantMaxUsedKbAfter": null,
+        "hasSpillWarningBefore": null,
+        "hasSpillWarningAfter": null,
+        "planRepetitionBefore": null,
+        "planRepetitionAfter": null,
+        "occurrence": 1,
+        "planHashBefore": null,
+        "planHashAfter": null,
+        "planLinkBefore": null,
+        "planLinkAfter": null,
+        "udfElapsedMilliseconds": null,
+        "metricAvailabilityBefore": {
+          "logicalReads": {
+            "status": "unavailable",
+            "reason": "Ambiguous statement attribution.",
+            "contributingCases": 0,
+            "selectedCases": 20
+          },
+          "scans": {
+            "status": "unavailable",
+            "reason": "Ambiguous statement attribution.",
+            "contributingCases": 0,
+            "selectedCases": 20
+          },
+          "lobLogicalReads": {
+            "status": "unavailable",
+            "reason": "Select a single case for this metric.",
+            "contributingCases": 0,
+            "selectedCases": 20
+          },
+          "cpuMs": {
+            "status": "unavailable",
+            "reason": "Select a single case for this metric.",
+            "contributingCases": 0,
+            "selectedCases": 20
+          },
+          "elapsedMs": {
+            "status": "unavailable",
+            "reason": "Select a single case for this metric.",
+            "contributingCases": 0,
+            "selectedCases": 20
+          },
+          "grantRequestedKb": {
+            "status": "unavailable",
+            "reason": "Select a single case for this metric.",
+            "contributingCases": 0,
+            "selectedCases": 20
+          },
+          "grantGrantedKb": {
+            "status": "unavailable",
+            "reason": "Select a single case for this metric.",
+            "contributingCases": 0,
+            "selectedCases": 20
+          },
+          "grantMaxUsedKb": {
+            "status": "unavailable",
+            "reason": "Select a single case for this metric.",
+            "contributingCases": 0,
+            "selectedCases": 20
+          },
+          "hasSpillWarning": {
+            "status": "unavailable",
+            "reason": "Select a single case for this metric.",
+            "contributingCases": 0,
+            "selectedCases": 20
+          }
+        },
+        "metricAvailabilityAfter": {
+          "logicalReads": {
+            "status": "unavailable",
+            "reason": "Ambiguous statement attribution.",
+            "contributingCases": 0,
+            "selectedCases": 20
+          },
+          "scans": {
+            "status": "unavailable",
+            "reason": "Ambiguous statement attribution.",
+            "contributingCases": 0,
+            "selectedCases": 20
+          },
+          "lobLogicalReads": {
+            "status": "unavailable",
+            "reason": "Select a single case for this metric.",
+            "contributingCases": 0,
+            "selectedCases": 20
+          },
+          "cpuMs": {
+            "status": "unavailable",
+            "reason": "Select a single case for this metric.",
+            "contributingCases": 0,
+            "selectedCases": 20
+          },
+          "elapsedMs": {
+            "status": "unavailable",
+            "reason": "Select a single case for this metric.",
+            "contributingCases": 0,
+            "selectedCases": 20
+          },
+          "grantRequestedKb": {
+            "status": "unavailable",
+            "reason": "Select a single case for this metric.",
+            "contributingCases": 0,
+            "selectedCases": 20
+          },
+          "grantGrantedKb": {
+            "status": "unavailable",
+            "reason": "Select a single case for this metric.",
+            "contributingCases": 0,
+            "selectedCases": 20
+          },
+          "grantMaxUsedKb": {
+            "status": "unavailable",
+            "reason": "Select a single case for this metric.",
+            "contributingCases": 0,
+            "selectedCases": 20
+          },
+          "hasSpillWarning": {
+            "status": "unavailable",
+            "reason": "Select a single case for this metric.",
+            "contributingCases": 0,
+            "selectedCases": 20
+          }
+        }
+      }
+    ],
+    "fallbackNote": "per-statement attribution incomplete",
+    "statementMetricsUnavailableReason": "Select a single case for statement CPU, elapsed, LOB logical reads, grants and spill warnings.",
+    "omittedStatementsBefore": 1,
+    "omittedStatementsAfter": 1,
+    "beforeAction": {
+      "operationId": 10000,
+      "side": "baseline",
+      "caseIds": [
+        "0",
+        "1",
+        "10",
+        "11",
+        "12",
+        "13",
+        "14",
+        "15",
+        "16",
+        "17",
+        "18",
+        "19",
+        "2",
+        "3",
+        "4",
+        "5",
+        "6",
+        "7",
+        "8",
+        "9"
+      ],
+      "caseIdsByFingerprint": {
+        "synthetic-case-0": "0",
+        "synthetic-case-1": "1",
+        "synthetic-case-2": "2",
+        "synthetic-case-3": "3",
+        "synthetic-case-4": "4",
+        "synthetic-case-5": "5",
+        "synthetic-case-6": "6",
+        "synthetic-case-7": "7",
+        "synthetic-case-8": "8",
+        "synthetic-case-9": "9",
+        "synthetic-case-10": "10",
+        "synthetic-case-11": "11",
+        "synthetic-case-12": "12",
+        "synthetic-case-13": "13",
+        "synthetic-case-14": "14",
+        "synthetic-case-15": "15",
+        "synthetic-case-16": "16",
+        "synthetic-case-17": "17",
+        "synthetic-case-18": "18",
+        "synthetic-case-19": "19"
+      }
+    },
+    "afterAction": {
+      "operationId": 10000,
+      "side": "candidate",
+      "caseIds": [
+        "0",
+        "1",
+        "10",
+        "11",
+        "12",
+        "13",
+        "14",
+        "15",
+        "16",
+        "17",
+        "18",
+        "19",
+        "2",
+        "3",
+        "4",
+        "5",
+        "6",
+        "7",
+        "8",
+        "9"
+      ],
+      "caseIdsByFingerprint": {
+        "synthetic-case-0": "0",
+        "synthetic-case-1": "1",
+        "synthetic-case-2": "2",
+        "synthetic-case-3": "3",
+        "synthetic-case-4": "4",
+        "synthetic-case-5": "5",
+        "synthetic-case-6": "6",
+        "synthetic-case-7": "7",
+        "synthetic-case-8": "8",
+        "synthetic-case-9": "9",
+        "synthetic-case-10": "10",
+        "synthetic-case-11": "11",
+        "synthetic-case-12": "12",
+        "synthetic-case-13": "13",
+        "synthetic-case-14": "14",
+        "synthetic-case-15": "15",
+        "synthetic-case-16": "16",
+        "synthetic-case-17": "17",
+        "synthetic-case-18": "18",
+        "synthetic-case-19": "19"
+      }
+    },
+    "tableIoUnavailable": false,
+    "cpuBeforeMs": 5,
+    "cpuAfterMs": 5,
+    "scansBefore": 1,
+    "scansAfter": 1,
+    "buffersBefore": null,
+    "buffersAfter": null,
+    "outcomes": {
+      "resultsEquivalent": 20,
+      "resultsDifferent": 0,
+      "resultsUnavailable": 0,
+      "ioBetter": 19,
+      "ioSame": 1,
+      "ioWorse": 0,
+      "ioUnavailable": 0,
+      "policyPass": 19,
+      "policyFail": 1,
+      "policyUnavailable": 0
+    },
+    "caseOutcomes": [
+      {
+        "caseKey": "synthetic-case-0",
+        "label": "@CustomerId = 1",
+        "resultsEquivalent": true,
+        "ioOutcome": "better",
+        "policyVerdict": "fail",
+        "policyUnavailableReason": null,
+        "policyReasons": [
+          "elapsed-regressed"
+        ],
+        "readsBefore": 341,
+        "readsAfter": 324,
+        "elapsedBeforeMs": 10,
+        "elapsedAfterMs": 30,
+        "cpuBeforeMs": 5,
+        "cpuAfterMs": 5,
+        "caseCount": 1
+      },
+      {
+        "caseKey": "synthetic-case-1",
+        "label": "@CustomerId = 2",
+        "resultsEquivalent": true,
+        "ioOutcome": "better",
+        "policyVerdict": "pass",
+        "policyUnavailableReason": null,
+        "policyReasons": [],
+        "readsBefore": 343,
+        "readsAfter": 326,
+        "elapsedBeforeMs": 10,
+        "elapsedAfterMs": 10,
+        "cpuBeforeMs": 5,
+        "cpuAfterMs": 5,
+        "caseCount": 1
+      },
+      {
+        "caseKey": "synthetic-case-2",
+        "label": "@CustomerId = 3",
+        "resultsEquivalent": true,
+        "ioOutcome": "better",
+        "policyVerdict": "pass",
+        "policyUnavailableReason": null,
+        "policyReasons": [],
+        "readsBefore": 344,
+        "readsAfter": 327,
+        "elapsedBeforeMs": 10,
+        "elapsedAfterMs": 10,
+        "cpuBeforeMs": 5,
+        "cpuAfterMs": 5,
+        "caseCount": 1
+      },
+      {
+        "caseKey": "synthetic-case-3",
+        "label": "@CustomerId = 4",
+        "resultsEquivalent": true,
+        "ioOutcome": "same",
+        "policyVerdict": "pass",
+        "policyUnavailableReason": null,
+        "policyReasons": [],
+        "readsBefore": 346,
+        "readsAfter": 346,
+        "elapsedBeforeMs": 10,
+        "elapsedAfterMs": 10,
+        "cpuBeforeMs": 5,
+        "cpuAfterMs": 5,
+        "caseCount": 1
+      },
+      {
+        "caseKey": "synthetic-case-4",
+        "label": "@CustomerId = 5",
+        "resultsEquivalent": true,
+        "ioOutcome": "better",
+        "policyVerdict": "pass",
+        "policyUnavailableReason": null,
+        "policyReasons": [],
+        "readsBefore": 348,
+        "readsAfter": 331,
+        "elapsedBeforeMs": 10,
+        "elapsedAfterMs": 10,
+        "cpuBeforeMs": 5,
+        "cpuAfterMs": 5,
+        "caseCount": 1
+      },
+      {
+        "caseKey": "synthetic-case-5",
+        "label": "@CustomerId = 6",
+        "resultsEquivalent": true,
+        "ioOutcome": "better",
+        "policyVerdict": "pass",
+        "policyUnavailableReason": null,
+        "policyReasons": [],
+        "readsBefore": 350,
+        "readsAfter": 333,
+        "elapsedBeforeMs": 10,
+        "elapsedAfterMs": 10,
+        "cpuBeforeMs": 5,
+        "cpuAfterMs": 5,
+        "caseCount": 1
+      },
+      {
+        "caseKey": "synthetic-case-6",
+        "label": "@CustomerId = 7",
+        "resultsEquivalent": true,
+        "ioOutcome": "better",
+        "policyVerdict": "pass",
+        "policyUnavailableReason": null,
+        "policyReasons": [],
+        "readsBefore": 351,
+        "readsAfter": 333,
+        "elapsedBeforeMs": 10,
+        "elapsedAfterMs": 10,
+        "cpuBeforeMs": 5,
+        "cpuAfterMs": 5,
+        "caseCount": 1
+      },
+      {
+        "caseKey": "synthetic-case-7",
+        "label": "@CustomerId = 8",
+        "resultsEquivalent": true,
+        "ioOutcome": "better",
+        "policyVerdict": "pass",
+        "policyUnavailableReason": null,
+        "policyReasons": [],
+        "readsBefore": 353,
+        "readsAfter": 335,
+        "elapsedBeforeMs": 10,
+        "elapsedAfterMs": 10,
+        "cpuBeforeMs": 5,
+        "cpuAfterMs": 5,
+        "caseCount": 1
+      },
+      {
+        "caseKey": "synthetic-case-8",
+        "label": "@CustomerId = 9",
+        "resultsEquivalent": true,
+        "ioOutcome": "better",
+        "policyVerdict": "pass",
+        "policyUnavailableReason": null,
+        "policyReasons": [],
+        "readsBefore": 355,
+        "readsAfter": 337,
+        "elapsedBeforeMs": 10,
+        "elapsedAfterMs": 10,
+        "cpuBeforeMs": 5,
+        "cpuAfterMs": 5,
+        "caseCount": 1
+      },
+      {
+        "caseKey": "synthetic-case-9",
+        "label": "@CustomerId = 10",
+        "resultsEquivalent": true,
+        "ioOutcome": "better",
+        "policyVerdict": "pass",
+        "policyUnavailableReason": null,
+        "policyReasons": [],
+        "readsBefore": 356,
+        "readsAfter": 338,
+        "elapsedBeforeMs": 10,
+        "elapsedAfterMs": 10,
+        "cpuBeforeMs": 5,
+        "cpuAfterMs": 5,
+        "caseCount": 1
+      },
+      {
+        "caseKey": "synthetic-case-10",
+        "label": "@CustomerId = 11",
+        "resultsEquivalent": true,
+        "ioOutcome": "better",
+        "policyVerdict": "pass",
+        "policyUnavailableReason": null,
+        "policyReasons": [],
+        "readsBefore": 358,
+        "readsAfter": 340,
+        "elapsedBeforeMs": 10,
+        "elapsedAfterMs": 10,
+        "cpuBeforeMs": 5,
+        "cpuAfterMs": 5,
+        "caseCount": 1
+      },
+      {
+        "caseKey": "synthetic-case-11",
+        "label": "@CustomerId = 12",
+        "resultsEquivalent": true,
+        "ioOutcome": "better",
+        "policyVerdict": "pass",
+        "policyUnavailableReason": null,
+        "policyReasons": [],
+        "readsBefore": 360,
+        "readsAfter": 342,
+        "elapsedBeforeMs": 10,
+        "elapsedAfterMs": 10,
+        "cpuBeforeMs": 5,
+        "cpuAfterMs": 5,
+        "caseCount": 1
+      },
+      {
+        "caseKey": "synthetic-case-12",
+        "label": "@CustomerId = 13",
+        "resultsEquivalent": true,
+        "ioOutcome": "better",
+        "policyVerdict": "pass",
+        "policyUnavailableReason": null,
+        "policyReasons": [],
+        "readsBefore": 361,
+        "readsAfter": 343,
+        "elapsedBeforeMs": 10,
+        "elapsedAfterMs": 10,
+        "cpuBeforeMs": 5,
+        "cpuAfterMs": 5,
+        "caseCount": 1
+      },
+      {
+        "caseKey": "synthetic-case-13",
+        "label": "@CustomerId = 14",
+        "resultsEquivalent": true,
+        "ioOutcome": "better",
+        "policyVerdict": "pass",
+        "policyUnavailableReason": null,
+        "policyReasons": [],
+        "readsBefore": 363,
+        "readsAfter": 345,
+        "elapsedBeforeMs": 10,
+        "elapsedAfterMs": 10,
+        "cpuBeforeMs": 5,
+        "cpuAfterMs": 5,
+        "caseCount": 1
+      },
+      {
+        "caseKey": "synthetic-case-14",
+        "label": "@CustomerId = 15",
+        "resultsEquivalent": true,
+        "ioOutcome": "better",
+        "policyVerdict": "pass",
+        "policyUnavailableReason": null,
+        "policyReasons": [],
+        "readsBefore": 365,
+        "readsAfter": 347,
+        "elapsedBeforeMs": 10,
+        "elapsedAfterMs": 10,
+        "cpuBeforeMs": 5,
+        "cpuAfterMs": 5,
+        "caseCount": 1
+      },
+      {
+        "caseKey": "synthetic-case-15",
+        "label": "@CustomerId = 16",
+        "resultsEquivalent": true,
+        "ioOutcome": "better",
+        "policyVerdict": "pass",
+        "policyUnavailableReason": null,
+        "policyReasons": [],
+        "readsBefore": 367,
+        "readsAfter": 349,
+        "elapsedBeforeMs": 10,
+        "elapsedAfterMs": 10,
+        "cpuBeforeMs": 5,
+        "cpuAfterMs": 5,
+        "caseCount": 1
+      },
+      {
+        "caseKey": "synthetic-case-16",
+        "label": "@CustomerId = 17",
+        "resultsEquivalent": true,
+        "ioOutcome": "better",
+        "policyVerdict": "pass",
+        "policyUnavailableReason": null,
+        "policyReasons": [],
+        "readsBefore": 368,
+        "readsAfter": 350,
+        "elapsedBeforeMs": 10,
+        "elapsedAfterMs": 10,
+        "cpuBeforeMs": 5,
+        "cpuAfterMs": 5,
+        "caseCount": 1
+      },
+      {
+        "caseKey": "synthetic-case-17",
+        "label": "@CustomerId = 18",
+        "resultsEquivalent": true,
+        "ioOutcome": "better",
+        "policyVerdict": "pass",
+        "policyUnavailableReason": null,
+        "policyReasons": [],
+        "readsBefore": 370,
+        "readsAfter": 352,
+        "elapsedBeforeMs": 10,
+        "elapsedAfterMs": 10,
+        "cpuBeforeMs": 5,
+        "cpuAfterMs": 5,
+        "caseCount": 1
+      },
+      {
+        "caseKey": "synthetic-case-18",
+        "label": "@CustomerId = 19",
+        "resultsEquivalent": true,
+        "ioOutcome": "better",
+        "policyVerdict": "pass",
+        "policyUnavailableReason": null,
+        "policyReasons": [],
+        "readsBefore": 372,
+        "readsAfter": 353,
+        "elapsedBeforeMs": 10,
+        "elapsedAfterMs": 10,
+        "cpuBeforeMs": 5,
+        "cpuAfterMs": 5,
+        "caseCount": 1
+      },
+      {
+        "caseKey": "synthetic-case-19",
+        "label": "@CustomerId = 20",
+        "resultsEquivalent": true,
+        "ioOutcome": "better",
+        "policyVerdict": "pass",
+        "policyUnavailableReason": null,
+        "policyReasons": [],
+        "readsBefore": 373,
+        "readsAfter": 354,
+        "elapsedBeforeMs": 10,
+        "elapsedAfterMs": 10,
+        "cpuBeforeMs": 5,
+        "cpuAfterMs": 5,
+        "caseCount": 1
+      }
+    ]
+  },
+  "partial": {
+    "a": "v48",
+    "b": "v49",
+    "basis": "MeasuredTogether",
+    "operationId": 10000,
+    "equivalenceLabel": "results equivalent (direct)",
+    "cases": [
+      {
+        "id": "synthetic-case-0",
+        "label": "@CustomerId = 1",
+        "outcome": "better"
+      },
+      {
+        "id": "synthetic-case-9",
+        "label": "@CustomerId = 10",
+        "outcome": "better"
+      },
+      {
+        "id": "synthetic-case-10",
+        "label": "@CustomerId = 11",
+        "outcome": "better"
+      },
+      {
+        "id": "synthetic-case-11",
+        "label": "@CustomerId = 12",
+        "outcome": "better"
+      },
+      {
+        "id": "synthetic-case-12",
+        "label": "@CustomerId = 13",
+        "outcome": "better"
+      },
+      {
+        "id": "synthetic-case-13",
+        "label": "@CustomerId = 14",
+        "outcome": "better"
+      },
+      {
+        "id": "synthetic-case-14",
+        "label": "@CustomerId = 15",
+        "outcome": "better"
+      },
+      {
+        "id": "synthetic-case-15",
+        "label": "@CustomerId = 16",
+        "outcome": "better"
+      },
+      {
+        "id": "synthetic-case-16",
+        "label": "@CustomerId = 17",
+        "outcome": "better"
+      },
+      {
+        "id": "synthetic-case-17",
+        "label": "@CustomerId = 18",
+        "outcome": "better"
+      },
+      {
+        "id": "synthetic-case-18",
+        "label": "@CustomerId = 19",
+        "outcome": "better"
+      },
+      {
+        "id": "synthetic-case-1",
+        "label": "@CustomerId = 2",
+        "outcome": "better"
+      },
+      {
+        "id": "synthetic-case-19",
+        "label": "@CustomerId = 20",
+        "outcome": "better"
+      },
+      {
+        "id": "synthetic-case-2",
+        "label": "@CustomerId = 3",
+        "outcome": "better"
+      },
+      {
+        "id": "synthetic-case-3",
+        "label": "@CustomerId = 4",
+        "outcome": "same"
+      },
+      {
+        "id": "synthetic-case-4",
+        "label": "@CustomerId = 5",
+        "outcome": "better"
+      },
+      {
+        "id": "synthetic-case-5",
+        "label": "@CustomerId = 6",
+        "outcome": "better"
+      },
+      {
+        "id": "synthetic-case-6",
+        "label": "@CustomerId = 7",
+        "outcome": "better"
+      },
+      {
+        "id": "synthetic-case-7",
+        "label": "@CustomerId = 8",
+        "outcome": "better"
+      },
+      {
+        "id": "synthetic-case-8",
+        "label": "@CustomerId = 9",
+        "outcome": "better"
+      }
+    ],
+    "selectedCase": "synthetic-case-19",
+    "aggregate": "sum",
+    "coverageLabel": "",
+    "mixed": null,
+    "tables": [
+      {
+        "table": "Orders",
+        "scansBefore": 1,
+        "scansAfter": 1,
+        "readsBefore": 373,
+        "readsAfter": 354,
+        "change": "−5%",
+        "lobLogicalReadsBefore": 0,
+        "lobLogicalReadsAfter": 0,
+        "dataLogicalReadsBefore": 373,
+        "dataLogicalReadsAfter": 354,
+        "physicalReadsBefore": 0,
+        "physicalReadsAfter": 0,
+        "readAheadReadsBefore": null,
+        "readAheadReadsAfter": null,
+        "lobPhysicalReadsBefore": 0,
+        "lobPhysicalReadsAfter": 0,
+        "lobReadAheadReadsBefore": 0,
+        "lobReadAheadReadsAfter": 0
+      }
+    ],
+    "collapsed": null,
+    "elapsed": {
+      "beforeMs": 10,
+      "afterMs": 10,
+      "policyVerdict": "fail",
+      "differentRun": false
+    },
+    "groupA": null,
+    "groupB": null,
+    "groupLabelA": null,
+    "groupLabelB": null,
+    "caseRows": [
+      {
+        "caseKey": "synthetic-case-0",
+        "labelA": "@CustomerId = 1",
+        "labelB": "@CustomerId = 1",
+        "rowsA": 1,
+        "rowsB": 1,
+        "rowsAVaries": false,
+        "rowsBVaries": false
+      },
+      {
+        "caseKey": "synthetic-case-9",
+        "labelA": "@CustomerId = 10",
+        "labelB": "@CustomerId = 10",
+        "rowsA": 1,
+        "rowsB": 1,
+        "rowsAVaries": false,
+        "rowsBVaries": false
+      },
+      {
+        "caseKey": "synthetic-case-10",
+        "labelA": "@CustomerId = 11",
+        "labelB": "@CustomerId = 11",
+        "rowsA": 1,
+        "rowsB": 1,
+        "rowsAVaries": false,
+        "rowsBVaries": false
+      },
+      {
+        "caseKey": "synthetic-case-11",
+        "labelA": "@CustomerId = 12",
+        "labelB": "@CustomerId = 12",
+        "rowsA": 1,
+        "rowsB": 1,
+        "rowsAVaries": false,
+        "rowsBVaries": false
+      },
+      {
+        "caseKey": "synthetic-case-12",
+        "labelA": "@CustomerId = 13",
+        "labelB": "@CustomerId = 13",
+        "rowsA": 1,
+        "rowsB": 1,
+        "rowsAVaries": false,
+        "rowsBVaries": false
+      },
+      {
+        "caseKey": "synthetic-case-13",
+        "labelA": "@CustomerId = 14",
+        "labelB": "@CustomerId = 14",
+        "rowsA": 1,
+        "rowsB": 1,
+        "rowsAVaries": false,
+        "rowsBVaries": false
+      },
+      {
+        "caseKey": "synthetic-case-14",
+        "labelA": "@CustomerId = 15",
+        "labelB": "@CustomerId = 15",
+        "rowsA": 1,
+        "rowsB": 1,
+        "rowsAVaries": false,
+        "rowsBVaries": false
+      },
+      {
+        "caseKey": "synthetic-case-15",
+        "labelA": "@CustomerId = 16",
+        "labelB": "@CustomerId = 16",
+        "rowsA": 1,
+        "rowsB": 1,
+        "rowsAVaries": false,
+        "rowsBVaries": false
+      },
+      {
+        "caseKey": "synthetic-case-16",
+        "labelA": "@CustomerId = 17",
+        "labelB": "@CustomerId = 17",
+        "rowsA": 1,
+        "rowsB": 1,
+        "rowsAVaries": false,
+        "rowsBVaries": false
+      },
+      {
+        "caseKey": "synthetic-case-17",
+        "labelA": "@CustomerId = 18",
+        "labelB": "@CustomerId = 18",
+        "rowsA": 1,
+        "rowsB": 1,
+        "rowsAVaries": false,
+        "rowsBVaries": false
+      },
+      {
+        "caseKey": "synthetic-case-18",
+        "labelA": "@CustomerId = 19",
+        "labelB": "@CustomerId = 19",
+        "rowsA": 1,
+        "rowsB": 1,
+        "rowsAVaries": false,
+        "rowsBVaries": false
+      },
+      {
+        "caseKey": "synthetic-case-1",
+        "labelA": "@CustomerId = 2",
+        "labelB": "@CustomerId = 2",
+        "rowsA": 1,
+        "rowsB": 1,
+        "rowsAVaries": false,
+        "rowsBVaries": false
+      },
+      {
+        "caseKey": "synthetic-case-19",
+        "labelA": "@CustomerId = 20",
+        "labelB": "@CustomerId = 20",
+        "rowsA": 1,
+        "rowsB": 1,
+        "rowsAVaries": false,
+        "rowsBVaries": false
+      },
+      {
+        "caseKey": "synthetic-case-2",
+        "labelA": "@CustomerId = 3",
+        "labelB": "@CustomerId = 3",
+        "rowsA": 1,
+        "rowsB": 1,
+        "rowsAVaries": false,
+        "rowsBVaries": false
+      },
+      {
+        "caseKey": "synthetic-case-3",
+        "labelA": "@CustomerId = 4",
+        "labelB": "@CustomerId = 4",
+        "rowsA": 1,
+        "rowsB": 1,
+        "rowsAVaries": false,
+        "rowsBVaries": false
+      },
+      {
+        "caseKey": "synthetic-case-4",
+        "labelA": "@CustomerId = 5",
+        "labelB": "@CustomerId = 5",
+        "rowsA": 1,
+        "rowsB": 1,
+        "rowsAVaries": false,
+        "rowsBVaries": false
+      },
+      {
+        "caseKey": "synthetic-case-5",
+        "labelA": "@CustomerId = 6",
+        "labelB": "@CustomerId = 6",
+        "rowsA": 1,
+        "rowsB": 1,
+        "rowsAVaries": false,
+        "rowsBVaries": false
+      },
+      {
+        "caseKey": "synthetic-case-6",
+        "labelA": "@CustomerId = 7",
+        "labelB": "@CustomerId = 7",
+        "rowsA": 1,
+        "rowsB": 1,
+        "rowsAVaries": false,
+        "rowsBVaries": false
+      },
+      {
+        "caseKey": "synthetic-case-7",
+        "labelA": "@CustomerId = 8",
+        "labelB": "@CustomerId = 8",
+        "rowsA": 1,
+        "rowsB": 1,
+        "rowsAVaries": false,
+        "rowsBVaries": false
+      },
+      {
+        "caseKey": "synthetic-case-8",
+        "labelA": "@CustomerId = 9",
+        "labelB": "@CustomerId = 9",
+        "rowsA": 1,
+        "rowsB": 1,
+        "rowsAVaries": false,
+        "rowsBVaries": false
+      }
+    ],
+    "versionLabelsProvisional": false,
+    "versionLabelNote": null,
+    "verdictBasis": "whole batch",
+    "view": "whole",
+    "wholeBatch": {
+      "before": 373,
+      "after": 354,
+      "shared": null,
+      "label": "whole batch: 373 → 354 reads",
+      "sharedBefore": null,
+      "sharedAfter": null,
+      "changedBefore": null,
+      "changedAfter": null
+    },
+    "statements": [
+      {
+        "key": "orders-select",
+        "text": "SELECT @CustomerId AS CustomerId;",
+        "status": "different-work",
+        "readsBefore": null,
+        "readsAfter": null,
+        "scansBefore": null,
+        "scansAfter": null,
+        "executions": 1,
+        "change": "—",
+        "attribution": "partial",
+        "hiddenWork": [],
+        "objects": [
+          {
+            "table": "Orders",
+            "scansBefore": null,
+            "scansAfter": null,
+            "readsBefore": null,
+            "readsAfter": null,
+            "change": "—",
+            "lobLogicalReadsBefore": null,
+            "lobLogicalReadsAfter": null,
+            "dataLogicalReadsBefore": null,
+            "dataLogicalReadsAfter": null,
+            "physicalReadsBefore": null,
+            "physicalReadsAfter": null,
+            "readAheadReadsBefore": null,
+            "readAheadReadsAfter": null,
+            "lobPhysicalReadsBefore": null,
+            "lobPhysicalReadsAfter": null,
+            "lobReadAheadReadsBefore": null,
+            "lobReadAheadReadsAfter": null
+          }
+        ],
+        "cpuBeforeMs": null,
+        "cpuAfterMs": null,
+        "elapsedBeforeMs": null,
+        "elapsedAfterMs": null,
+        "grantRequestedKbBefore": null,
+        "grantRequestedKbAfter": null,
+        "grantGrantedKbBefore": null,
+        "grantGrantedKbAfter": null,
+        "grantMaxUsedKbBefore": null,
+        "grantMaxUsedKbAfter": null,
+        "hasSpillWarningBefore": null,
+        "hasSpillWarningAfter": null,
+        "planRepetitionBefore": null,
+        "planRepetitionAfter": null,
+        "occurrence": 1,
+        "planHashBefore": null,
+        "planHashAfter": null,
+        "planLinkBefore": null,
+        "planLinkAfter": null,
+        "udfElapsedMilliseconds": null,
+        "metricAvailabilityBefore": {
+          "logicalReads": {
+            "status": "unavailable",
+            "reason": "Ambiguous statement attribution.",
+            "contributingCases": 0,
+            "selectedCases": 1
+          },
+          "scans": {
+            "status": "unavailable",
+            "reason": "Ambiguous statement attribution.",
+            "contributingCases": 0,
+            "selectedCases": 1
+          },
+          "lobLogicalReads": {
+            "status": "unavailable",
+            "reason": "Ambiguous statement attribution.",
+            "contributingCases": 0,
+            "selectedCases": 1
+          },
+          "cpuMs": {
+            "status": "unavailable",
+            "reason": "Ambiguous statement attribution.",
+            "contributingCases": 0,
+            "selectedCases": 1
+          },
+          "elapsedMs": {
+            "status": "unavailable",
+            "reason": "Ambiguous statement attribution.",
+            "contributingCases": 0,
+            "selectedCases": 1
+          },
+          "grantRequestedKb": {
+            "status": "unavailable",
+            "reason": "Ambiguous statement attribution.",
+            "contributingCases": 0,
+            "selectedCases": 1
+          },
+          "grantGrantedKb": {
+            "status": "unavailable",
+            "reason": "Ambiguous statement attribution.",
+            "contributingCases": 0,
+            "selectedCases": 1
+          },
+          "grantMaxUsedKb": {
+            "status": "unavailable",
+            "reason": "Ambiguous statement attribution.",
+            "contributingCases": 0,
+            "selectedCases": 1
+          },
+          "hasSpillWarning": {
+            "status": "unavailable",
+            "reason": "Ambiguous statement attribution.",
+            "contributingCases": 0,
+            "selectedCases": 1
+          }
+        },
+        "metricAvailabilityAfter": {
+          "logicalReads": {
+            "status": "unavailable",
+            "reason": "Ambiguous statement attribution.",
+            "contributingCases": 0,
+            "selectedCases": 1
+          },
+          "scans": {
+            "status": "unavailable",
+            "reason": "Ambiguous statement attribution.",
+            "contributingCases": 0,
+            "selectedCases": 1
+          },
+          "lobLogicalReads": {
+            "status": "unavailable",
+            "reason": "Ambiguous statement attribution.",
+            "contributingCases": 0,
+            "selectedCases": 1
+          },
+          "cpuMs": {
+            "status": "unavailable",
+            "reason": "Ambiguous statement attribution.",
+            "contributingCases": 0,
+            "selectedCases": 1
+          },
+          "elapsedMs": {
+            "status": "unavailable",
+            "reason": "Ambiguous statement attribution.",
+            "contributingCases": 0,
+            "selectedCases": 1
+          },
+          "grantRequestedKb": {
+            "status": "unavailable",
+            "reason": "Ambiguous statement attribution.",
+            "contributingCases": 0,
+            "selectedCases": 1
+          },
+          "grantGrantedKb": {
+            "status": "unavailable",
+            "reason": "Ambiguous statement attribution.",
+            "contributingCases": 0,
+            "selectedCases": 1
+          },
+          "grantMaxUsedKb": {
+            "status": "unavailable",
+            "reason": "Ambiguous statement attribution.",
+            "contributingCases": 0,
+            "selectedCases": 1
+          },
+          "hasSpillWarning": {
+            "status": "unavailable",
+            "reason": "Ambiguous statement attribution.",
+            "contributingCases": 0,
+            "selectedCases": 1
+          }
+        }
+      }
+    ],
+    "fallbackNote": "per-statement attribution incomplete",
+    "statementMetricsUnavailableReason": null,
+    "omittedStatementsBefore": 1,
+    "omittedStatementsAfter": 1,
+    "beforeAction": {
+      "operationId": 10000,
+      "side": "baseline",
+      "caseIds": [
+        "0",
+        "1",
+        "10",
+        "11",
+        "12",
+        "13",
+        "14",
+        "15",
+        "16",
+        "17",
+        "18",
+        "19",
+        "2",
+        "3",
+        "4",
+        "5",
+        "6",
+        "7",
+        "8",
+        "9"
+      ],
+      "caseIdsByFingerprint": {
+        "synthetic-case-0": "0",
+        "synthetic-case-1": "1",
+        "synthetic-case-2": "2",
+        "synthetic-case-3": "3",
+        "synthetic-case-4": "4",
+        "synthetic-case-5": "5",
+        "synthetic-case-6": "6",
+        "synthetic-case-7": "7",
+        "synthetic-case-8": "8",
+        "synthetic-case-9": "9",
+        "synthetic-case-10": "10",
+        "synthetic-case-11": "11",
+        "synthetic-case-12": "12",
+        "synthetic-case-13": "13",
+        "synthetic-case-14": "14",
+        "synthetic-case-15": "15",
+        "synthetic-case-16": "16",
+        "synthetic-case-17": "17",
+        "synthetic-case-18": "18",
+        "synthetic-case-19": "19"
+      }
+    },
+    "afterAction": {
+      "operationId": 10000,
+      "side": "candidate",
+      "caseIds": [
+        "0",
+        "1",
+        "10",
+        "11",
+        "12",
+        "13",
+        "14",
+        "15",
+        "16",
+        "17",
+        "18",
+        "19",
+        "2",
+        "3",
+        "4",
+        "5",
+        "6",
+        "7",
+        "8",
+        "9"
+      ],
+      "caseIdsByFingerprint": {
+        "synthetic-case-0": "0",
+        "synthetic-case-1": "1",
+        "synthetic-case-2": "2",
+        "synthetic-case-3": "3",
+        "synthetic-case-4": "4",
+        "synthetic-case-5": "5",
+        "synthetic-case-6": "6",
+        "synthetic-case-7": "7",
+        "synthetic-case-8": "8",
+        "synthetic-case-9": "9",
+        "synthetic-case-10": "10",
+        "synthetic-case-11": "11",
+        "synthetic-case-12": "12",
+        "synthetic-case-13": "13",
+        "synthetic-case-14": "14",
+        "synthetic-case-15": "15",
+        "synthetic-case-16": "16",
+        "synthetic-case-17": "17",
+        "synthetic-case-18": "18",
+        "synthetic-case-19": "19"
+      }
+    },
+    "tableIoUnavailable": false,
+    "cpuBeforeMs": 5,
+    "cpuAfterMs": 5,
+    "scansBefore": 1,
+    "scansAfter": 1,
+    "buffersBefore": null,
+    "buffersAfter": null,
+    "outcomes": {
+      "resultsEquivalent": 1,
+      "resultsDifferent": 0,
+      "resultsUnavailable": 0,
+      "ioBetter": 1,
+      "ioSame": 0,
+      "ioWorse": 0,
+      "ioUnavailable": 0,
+      "policyPass": 1,
+      "policyFail": 0,
+      "policyUnavailable": 0
+    },
+    "caseOutcomes": [
+      {
+        "caseKey": "synthetic-case-19",
+        "label": "@CustomerId = 20",
+        "resultsEquivalent": true,
+        "ioOutcome": "better",
+        "policyVerdict": "pass",
+        "policyUnavailableReason": null,
+        "policyReasons": [],
+        "readsBefore": 373,
+        "readsAfter": 354,
+        "elapsedBeforeMs": 10,
+        "elapsedAfterMs": 10,
+        "cpuBeforeMs": 5,
+        "cpuAfterMs": 5,
+        "caseCount": 1
+      }
+    ]
+  }
+}

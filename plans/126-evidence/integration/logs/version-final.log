@@ -1,0 +1,25 @@
+
+ RUN  v5.0.3 C:/Users/rgone/MultiCliProfiles/codex/account-b/worktrees/8723/sqlharness/src/SqlHarness.Dashboard/ui
+
+ ✓ src/components/optimization/VersionTable.test.tsx > A and B are independent exclusive native groups, isolated per table instance 329ms
+ ✓ src/components/optimization/VersionTable.test.tsx > version labels share the version line and retain their full title 26ms
+ ✓ src/components/optimization/VersionTable.test.tsx > shows rows column and dash for missing 41ms
+ ✓ src/components/optimization/VersionTable.test.tsx > shows explicit row count variation separately from missing 14ms
+ ✓ src/components/optimization/VersionTable.test.tsx > selected-case sum and mean use per-case medians, missing contributors remain unavailable 1ms
+ ✓ src/components/optimization/VersionTable.test.tsx > timing headings identify the aggregation and scans and CPU are visible 42ms
+ ✓ src/components/optimization/VersionTable.test.tsx > foreign case IDs never silently select another condition group's own cases 1ms
+ ✓ src/components/optimization/VersionTable.test.tsx > inactive version rows cannot borrow a recorded policy from another directed pair 24ms
+ ✓ src/components/optimization/VersionTable.test.tsx > baseline result coverage follows the active selected-case comparison 35ms
+ ✓ src/components/optimization/VersionTable.test.tsx > baseline coverage follows selected case and candidate uses the projected counts 47ms
+ ✓ src/components/optimization/VersionTable.test.tsx > shows selected timing summaries and scans in the version table 41ms
+ ✓ src/components/optimization/VersionTable.test.tsx > unpaired rows retain their own case timing while selection changes the active pair 42ms
+ ✓ src/components/optimization/VersionTable.test.tsx > without a pair uses all cases and shows missing timing coverage in scrollable table 24ms
+ ✓ src/components/optimization/VersionTable.test.tsx > uses full timing contributors for other rows and per-side metric coverage 41ms
+ ✓ src/components/optimization/VersionTable.test.tsx > cross-condition contributors use varying identities only for group A and preserve other groups 71ms
+ ✓ src/components/optimization/VersionTable.test.tsx > an unpaired row missing a selected contributor is unavailable rather than a partial sum 45ms
+
+ Test Files  1 passed (1)
+      Tests  16 passed (16)
+   Start at  10:14:59
+   Duration  7.69s (import 70%, environment 12%, tests 11%, setup 4%, transform 3%)
+
