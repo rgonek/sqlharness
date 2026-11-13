@@ -183,7 +183,9 @@ function OperationView({ id, returnSearch }: { id: number; returnSearch: Operati
 
   const detail = query.data
   const op = detail.operation
-  if (op.operation === "compare" && op.status === "succeeded") return <CompareOperationView id={id} detail={detail} returnSearch={returnSearch} />
+  if (op.operation === "compare") return op.status === "succeeded"
+    ? <CompareOperationView id={id} detail={detail} returnSearch={returnSearch} />
+    : <UnavailableComparison detail={detail} returnSearch={returnSearch} />
   const hasPlanParameterSet = returnSearch.planParameterSetNull === true || returnSearch.planParameterSet !== undefined
   const planTarget = hasPlanParameterSet && returnSearch.planCase !== undefined && returnSearch.planRepetition !== undefined
     && returnSearch.planDocument !== undefined && returnSearch.planStatement !== undefined
@@ -338,6 +340,16 @@ function OperationView({ id, returnSearch }: { id: number; returnSearch: Operati
   )
 }
 
+function UnavailableComparison({ detail, returnSearch, feedback }: { detail: OperationDetail; returnSearch: OperationDetailSearch; feedback?: ReactNode }) {
+  return <div className="operation-page space-y-4">
+    <OperationHeading detail={detail} returnSearch={returnSearch} />
+    {feedback ?? <p role="status" className="text-sm text-muted-foreground">No eligible successful comparison evidence is retained for this attempt. Recorded operation details remain available.</p>}
+    <CompareDetail detail={detail} />
+    {detail.variants.length > 0 && <section aria-label="Retained partial measurements" className="space-y-3"><h2 className="font-medium">Retained partial measurements</h2>{detail.variants.map(variant => <VariantPanel key={variant.ordinal} operationId={detail.operation.id} variant={variant} engine={detail.operation.engine} />)}</section>}
+    <StoredSqlReuse detail={detail} />
+  </div>
+}
+
 function CompareOperationView({ id, detail, returnSearch }: { id: number; detail: OperationDetail; returnSearch: OperationDetailSearch }) {
   const op = detail.operation
   const navigate = useNavigate({ from: "/operations/$id" })
@@ -349,13 +361,7 @@ function CompareOperationView({ id, detail, returnSearch }: { id: number; detail
   const returnSession = returnSearch.returnSession === op.sessionId ? returnSearch.returnSession : undefined
   const returnAgent = agentReturnKey(returnSearch)
   const returnLink = returnAgent ? <Link aria-label="Back to session Optimization" to="/agent-sessions/$kind/$id" params={{ kind: returnAgent.agentKind, id: returnAgent.conversationId }} search={sessionSearchFromOperation(returnSearch)} className="underline">Open in session Optimization →</Link> : <Link aria-label="Back to session Optimization" to="/sessions/$id" params={{ id: String(op.sessionId) }} search={returnSession ? sessionSearchFromOperation(returnSearch) : undefined} className="underline">Open in session Optimization →</Link>
-  if (comparison.error) return <div className="operation-page space-y-4">
-    <OperationHeading detail={detail} returnSearch={returnSearch} />
-    {comparison.error instanceof NotFoundError ? <p role="status" className="text-sm text-muted-foreground">No eligible successful comparison evidence is retained for this attempt. Recorded operation details remain available.</p> : <ErrorState error={comparison.error} onRetry={() => void comparison.refetch()} retrying={comparison.isFetching} />}
-    <CompareDetail detail={detail} />
-    {detail.variants.length > 0 && <section aria-label="Retained partial measurements" className="space-y-3"><h2 className="font-medium">Retained partial measurements</h2>{detail.variants.map(variant => <VariantPanel key={variant.ordinal} operationId={op.id} variant={variant} engine={op.engine} />)}</section>}
-    <StoredSqlReuse detail={detail} />
-  </div>
+  if (comparison.error) return <UnavailableComparison detail={detail} returnSearch={returnSearch} feedback={comparison.error instanceof NotFoundError ? undefined : <ErrorState error={comparison.error} onRetry={() => void comparison.refetch()} retrying={comparison.isFetching} />} />
   return <div className="operation-page space-y-4">
     <OperationHeading detail={detail} returnSearch={returnSearch} />
 
