@@ -5,12 +5,13 @@ using SqlHarness.Tests;
 
 namespace SqlHarness.Tests.Auth;
 
+[Collection(ResourceSensitiveCollection.Name)]
 public sealed class ProcessRunnerTests
 {
-    // Poll budget for the publisher handshake (480 x 25 ms = 12 s). Slow PowerShell
-    // start under parallel-suite load is tolerated; a publisher-side failure still
-    // surfaces fast via the ERROR line below, so this budget only prices true hangs.
-    private const int PidPublicationWaitAttempts = 480;
+    // Allow up to 60 s for a cold PowerShell process on a shared CI runner. The
+    // cancellation assertions begin only after both live PIDs are published;
+    // publisher-side failures still surface immediately via the ERROR marker.
+    private const int PidPublicationWaitAttempts = 2400;
     private const int PidPublicationWaitDelayMs = 25;
     private const int DirectoryDeleteRetryAttempts = 10;
     private const int DirectoryDeleteRetryDelayMs = 100;
@@ -468,7 +469,7 @@ public sealed class ProcessRunnerTests
 
     private static async Task WaitForFileAsync(string path)
     {
-        for (var attempt = 0; attempt < 200; attempt++)
+        for (var attempt = 0; attempt < PidPublicationWaitAttempts; attempt++)
         {
             if (File.Exists(path))
                 return;

@@ -7,6 +7,7 @@ using OperationPhase = SqlHarness.Core.Journal.OperationPhase;
 
 namespace SqlHarness.Tests.Journal;
 
+[Collection(ResourceSensitiveCollection.Name)]
 public sealed class ActivityJournalPhaseTests
 {
     [Theory]

@@ -9,6 +9,7 @@ using SqlHarness.Tests;
 
 namespace SqlHarness.Tests.Journal;
 
+[Collection(ResourceSensitiveCollection.Name)]
 public sealed class ActivityJournalTests
 {
     private static IActivityJournal Open(JournalTempDirectory temp, TextWriter log, bool storeSensitive = false, FixedTimeProvider? time = null) =>
