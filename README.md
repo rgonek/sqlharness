@@ -55,7 +55,7 @@ Release binaries take their numeric version from the release tag (for example, t
 Example for Windows PowerShell:
 
 ```powershell
-$version = "v0.1.0" # replace with the chosen release tag
+$version = "v0.4.0" # replace with the chosen release tag
 $base = "https://github.com/rgonek/sqlharness/releases/download/$version"
 Invoke-WebRequest "$base/sqlharness-win-x64.zip" -OutFile sqlharness-win-x64.zip
 Invoke-WebRequest "$base/SHA256SUMS" -OutFile SHA256SUMS

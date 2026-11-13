@@ -23,6 +23,7 @@ public sealed class CliCommandSurfaceTests
             RedirectStandardOutput = true,
             RedirectStandardError = true,
             UseShellExecute = false,
+            Environment = { ["NO_COLOR"] = "1" },
         });
 
         Assert.NotNull(process);

@@ -294,6 +294,7 @@ public sealed partial class DocsSyncTests
             RedirectStandardOutput = true,
             RedirectStandardError = true,
             UseShellExecute = false,
+            Environment = { ["NO_COLOR"] = "1" },
         })!;
         var stdout = process.StandardOutput.ReadToEndAsync();
         var stderr = process.StandardError.ReadToEndAsync();

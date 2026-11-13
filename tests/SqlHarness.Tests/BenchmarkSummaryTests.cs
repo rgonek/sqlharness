@@ -1104,7 +1104,7 @@ public sealed class BenchmarkSummaryTests
         Assert.Equal(1, href.Cursor);
     }
 
-    private const string ArtifactDir = @"C:\tmp\artifact-001";
+    private static readonly string ArtifactDir = Path.Combine(Path.GetTempPath(), "artifact-001");
 
     private static CompareOperatorReport OriginOp(
         int nodeId,
