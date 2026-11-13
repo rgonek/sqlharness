@@ -2,9 +2,9 @@
 
 **Goal:** Present SQLHarness through a reproducible synthetic optimization story, genuine dashboard screenshots, a clearer README introduction, and a GitHub draft release.
 
-**Authorization:** The operator accepted the proposed screenshot/README package on 2026-11-13 and requested subsequent GitHub release preparation. No Tiny Tool Town submission. Prepare a draft, not a public release.
+**Authorization:** The operator accepted the screenshot/README package, then explicitly requested main integration, push and release publication on 2026-11-13. No Tiny Tool Town submission.
 
-**Status:** COMPLETE; locally integrated into `main` by fast-forward to `e967bdd1` on 2026-11-13 at the operator's explicit request. [GitHub draft v0.4.0](https://github.com/rgonek/sqlharness/releases/tag/untagged-9ac45435c8f858fa9e5f).
+**Status:** COMPLETE; main pushed and [v0.4.0 published as Latest](https://github.com/rgonek/sqlharness/releases/tag/v0.4.0). Release tag and all binary builds target `4ce7f7f16b684dde88905d71fa674e854168d1fd`. Historical draft evidence below is superseded by the final publication record.
 
 **Approach:** Keep application behavior unchanged. Seed a new isolated local journal with demo-only data and capture the actual dashboard. Reuse the existing journal schema and browser tooling. No database connections, real credentials, personal SQLHarness home, or runtime demo mode.
 
@@ -46,3 +46,16 @@ Before publication, inspection of GitHub CI run 43418903568 revealed three help-
 The complete original Linux failure list included five benchmark-summary cases sharing that Windows-path fixture, plus three further platform-dependent test assumptions. Run 43443877762 confirmed the initial parser/path fixes and isolated the remaining three: an open SQLite connection did not enforce managed FileShare exclusion on Unix, record equality compared launch-argument collection identities, and the HTTP test server reconstructed CRLF headers with native AppendLine. Tests now acquire an explicit exclusive managed file handle, compare executable and argument contents separately, and preserve canonical CRLF in the captured HTTP request. Original security/body assertions remain intact. Independent review caught the related Content-Length parsing issue before the final CRLF fix. The final focused Windows run passed 110 with one Unix-only skip, including all affected test classes (`D:/temp/sqlharness-release-portability-final.log`). No application source changes.
 
 Both Unix release archives were repackaged with executable mode 0755 and documentation mode 0644. Extracted binary SHA-256 values match the original published outputs; SHA256SUMS and all five GitHub asset digests were reverified after upload.
+
+## Final publication — 2026-11-13
+
+The operator authorized push and publication. Version 0.4.0 continues the pre-1.0 sequence; the CLI/MCP contracts still evolve. Main and the release source were pushed. The public release is Latest, not a prerelease; its tag resolves to `4ce7f7f16b684dde88905d71fa674e854168d1fd`.
+
+Final [GitHub CI run 43498191993](https://github.com/rgonek/sqlharness/actions/runs/43498191993) passed on Windows and Linux for that exact revision. The integrated Windows `just verify` gate previously passed in 11m43s at `D:/temp/sqlharness-release-final-verify-20261113` (UI 570, Core 4919 passed / 11 skipped, MCP 537 passed / 4 skipped); subsequent changes affected test fixtures only. Final CI verifies the complete release tree. Independent review found no outstanding findings.
+
+Retained earlier failures exposed platform-dependent fixtures, pre-existing formatting diagnostics, resource-sensitive hosted-runner tests and bounded-path assertions. Formatting changed 54 files without behavioral changes. Three resource-sensitive test classes now run without unrelated class concurrency, retaining their internal concurrency assertions; cold PowerShell startup allows 60 seconds. Hosted-runner root cause was not proven. Core passed separately with two logical processors (4919/11). A long TEMP prefix reproduced six failures in 29 MCP reader tests; bounded assertions and short synthetic rejection roots then passed 29/29, with production budgets/redaction unchanged and the known-secret assertion strengthened. Full MCP passed 537/4. The final Pester fixture accepts a numeric, nonnegative elapsed duration because rounding can legitimately produce 0.0; local Pester passed 84/84. Original failed-run evidence remains available.
+
+Final self-contained archives are under `D:/temp/sqlharness-release-v0.4.0-4ce7f7f1-20261113/assets`. All five uploaded assets matched local SHA-256 digests before publication. Windows archive extraction, executable hash, version/build ID, embedded-dashboard routes and metrics, and MCP initialization/tool discovery/capabilities passed. These checks used isolated synthetic homes and no database connection. Unix archives preserve executable mode 0755. Linux CI ran its native tests and published-server smoke; the exact cross-built Linux/macOS download binaries were not launched on those operating systems. macOS runtime acceptance remains unverified.
+
+The public Windows download checksum was verified after publication. The release contains Windows x64, Linux x64 and macOS arm64 archives, the skill ZIP and SHA256SUMS. No Tiny Tool Town submission was made.
+Publishing the draft created the tag and triggered redundant Release workflow 43501491386. It was canceled after public publication/checksum verification to avoid a second release-creation attempt; final main CI 43498191993 passed.
