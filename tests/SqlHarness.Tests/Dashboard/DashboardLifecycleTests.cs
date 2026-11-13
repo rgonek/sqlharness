@@ -470,7 +470,7 @@ public sealed class DashboardLifecycleTests
                 var request = new System.Text.StringBuilder();
                 string? line;
                 while (!string.IsNullOrEmpty(line = await reader.ReadLineAsync(_stop.Token)))
-                    request.AppendLine(line);
+                    request.Append(line).Append("\r\n");
                 var contentLength = request.ToString().Split("\r\n", StringSplitOptions.RemoveEmptyEntries)
                     .Select(header => header.Split(':', 2))
                     .Where(parts => parts.Length == 2 && string.Equals(parts[0], "Content-Length", StringComparison.OrdinalIgnoreCase))

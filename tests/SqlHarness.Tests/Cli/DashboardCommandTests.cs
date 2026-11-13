@@ -137,7 +137,9 @@ public sealed class DashboardCommandTests
 
         Assert.Equal((int)SqlHarnessExitCode.Success, exitCode);
         var launch = Assert.Single(launcher.Launches);
-        Assert.Equal(DashboardLaunchCommand.Current(), launch.Command);
+        var expectedCommand = DashboardLaunchCommand.Current();
+        Assert.Equal(expectedCommand.FileName, launch.Command.FileName);
+        Assert.Equal(expectedCommand.Arguments, launch.Command.Arguments);
         Assert.Equal(["dashboard", "--background"], launch.Command.Arguments.TakeLast(2));
         Assert.Equal(home.Path, launch.WorkingDirectory);
         Assert.Equal(home.Path, lifecycle.Home);

@@ -128,20 +128,17 @@ public sealed class ActivityJournalTests
     {
         using var temp = new JournalTempDirectory();
         SeedLegacyJournal(temp.DatabasePath, 13, "legacy-row");
-        using var heldConnection = new SqliteConnection(new SqliteConnectionStringBuilder
-        {
-            DataSource = temp.DatabasePath,
-            Pooling = false,
-        }.ToString());
-        heldConnection.Open();
         using var log = new StringWriter();
 
-        var journal = Open(temp, log);
-        var handle = journal.Begin(JournalTestData.Session(), JournalTestData.Start());
+        using (var heldFile = new FileStream(temp.DatabasePath, FileMode.Open, FileAccess.ReadWrite, FileShare.None))
+        {
+            var journal = Open(temp, log);
+            var handle = journal.Begin(JournalTestData.Session(), JournalTestData.Start());
 
-        Assert.IsType<NullActivityJournal>(journal);
-        Assert.Null(handle);
-        Assert.Contains("activity journal unavailable", log.ToString(), StringComparison.Ordinal);
+            Assert.IsType<NullActivityJournal>(journal);
+            Assert.Null(handle);
+            Assert.Contains("activity journal unavailable", log.ToString(), StringComparison.Ordinal);
+        }
         Assert.Equal(13L, JournalDb.Rows(temp.DatabasePath, "PRAGMA user_version").Single()["user_version"]);
         Assert.Equal("legacy-row", JournalDb.Rows(temp.DatabasePath, "SELECT value FROM legacy_data").Single()["value"]);
         Assert.Empty(Directory.GetFiles(Path.GetDirectoryName(temp.DatabasePath)!, "*.bak"));
