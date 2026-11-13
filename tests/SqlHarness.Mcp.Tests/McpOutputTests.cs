@@ -755,7 +755,7 @@ public sealed class McpOutputTests
                 MinimumMedianElapsedMillisecondsExact = 0.3m,
                 MaximumMedianElapsedMillisecondsExact = 0.8m,
             },
-            @"C:\artifacts\sets\20260101T000000000Z-sets-aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa");
+            Path.Combine(Path.GetTempPath(), "sets", "20260101T000000000Z-sets-aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"));
 
         var result = McpResultAdapter.Adapt(
             new SqlHarnessOutcome(SqlHarnessExitCode.Success, report, null),
