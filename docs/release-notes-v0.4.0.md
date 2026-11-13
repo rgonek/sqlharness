@@ -2,6 +2,8 @@
 
 SQLHarness now brings SQL optimization evidence into a local browser dashboard, alongside its CLI and MCP server. Compare proposed rewrites, check their results for the tested inputs, and follow the attempts that led to a selected query version.
 
+![SQLHarness local dashboard with synthetic demo data](https://raw.githubusercontent.com/rgonek/sqlharness/ef7084b820fb22cdada273623a63c1faeddac596/docs/images/comparison.png)
+
 ## Highlights
 
 - **Local dashboard:** browse activity and sessions, compare retained SQL versions, review elapsed time, CPU and IO, and copy comparisons as Markdown.
@@ -26,4 +28,9 @@ Choose `sqlharness-win-x64.zip`, `sqlharness-linux-x64.tar.gz`, or `sqlharness-o
 
 ## Validation
 
-Release preparation is in progress. This remains a draft until the checks and platform limitations below have been recorded.
+- Source and archive build revision: `ef7084b820fb22cdada273623a63c1faeddac596`.
+- Windows verification gate passed: UI 570 tests, Core 4,919 passed / 11 skipped, MCP 537 passed / 4 skipped. The unchanged `scripts/verify.ps1` gate was invoked directly under PowerShell without profiles.
+- Self-contained single-file builds succeeded for `win-x64`, `linux-x64`, and `osx-arm64`.
+- The Windows release binary passed version/help, archive extraction, and embedded-dashboard checks, including all three demo views and asserted comparison metrics.
+- Linux and macOS binaries were cross-built on Windows; execution on those operating systems has not been verified in this preparation.
+- This release is a draft for review. It has not been published.

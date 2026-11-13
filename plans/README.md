@@ -2,7 +2,7 @@
 
 Read the selected plan and its spec before executing. A queue entry is not approval for implementation, publication or a live DB. We execute each assigned plan in full; general work and SQL Server take priority over PostgreSQL-only work.
 
-Plan [129](129-showcase-and-release.md): **IN PROGRESS** — synthetic demo journal, three real-dashboard screenshots, README introduction and listing copy prepared on `docs/showcase-release`; Windows release verification and GitHub draft preparation in progress. No Tiny Tool Town submission or public release.
+Plan [129](129-showcase-and-release.md): **COMPLETE ON `docs/showcase-release`** — reproducible synthetic demo, three real-dashboard screenshots, README introduction and listing copy; independent review found no actionable issues. Windows gate PASS (UI 570, Core 4919/11 skipped, MCP 537/4 skipped). GitHub `v0.4.0` draft prepared with three platform archives, skill ZIP and SHA256SUMS; all five uploaded digests verified. No merge, Tiny Tool Town submission or public release; Linux/macOS runtime acceptance unverified.
 
 Plan [124](124-profile-editing-and-mutation-inheritance.md): **DONE; locally integrated into `main` at `1adc4030`** — Windows-only profile Save; Terra high task and Sol low whole-branch/final scoped reviews approved. Final Windows gate PASS on unchanged product `71a42d2a` (UI 462, Core 4834/11 skipped, MCP 537/4 skipped). No push or live/Linux acceptance. [Integration](124-evidence/integration.md), [evidence](124-evidence/verification.md), [history](history.md#plan-124--done-on-plan-124-2026-10-30).
 
