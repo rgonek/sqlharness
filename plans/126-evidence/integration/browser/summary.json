@@ -1,0 +1,531 @@
+{
+  "revision": "0420529c0c212c003e97ed2a3abd4a82bfb9d5c4",
+  "startedAt": "2026-11-13T09:40:48.303Z",
+  "finishedAt": "2026-11-13T09:44:04.490Z",
+  "passed": true,
+  "checks": [
+    {
+      "name": "fixture counts frozen",
+      "source": "actual backend",
+      "passed": true,
+      "milliseconds": 0
+    },
+    {
+      "name": "actual DTO mixed IO/policy, zero/missing counters, sum/mean and case timing",
+      "source": "actual backend",
+      "passed": true,
+      "milliseconds": 5931
+    },
+    {
+      "name": "actual optimization has 50 versions and failed attempt excluded",
+      "source": "actual backend",
+      "passed": true,
+      "milliseconds": 752
+    },
+    {
+      "name": "independent non-adjacent pair keeps policy unavailable in actual DTO/UI",
+      "source": "actual backend",
+      "passed": true,
+      "milliseconds": 6225
+    },
+    {
+      "name": "activity readable and keyboard skip link",
+      "source": "actual backend",
+      "passed": true,
+      "milliseconds": 1613
+    },
+    {
+      "name": "activity search and facet survive detail round trip and browser back/forward",
+      "source": "actual backend",
+      "passed": true,
+      "milliseconds": 3462
+    },
+    {
+      "name": "comparison pair and independent dimensions visible through actual UI",
+      "source": "actual backend",
+      "passed": true,
+      "milliseconds": 4252
+    },
+    {
+      "name": "selected aggregate updates table and source timing",
+      "source": "actual backend",
+      "passed": true,
+      "milliseconds": 5121
+    },
+    {
+      "name": "history successive pages stay bounded",
+      "source": "actual backend",
+      "passed": true,
+      "milliseconds": 54
+    },
+    {
+      "name": "failed compare reason retained in actual detail",
+      "source": "actual backend",
+      "passed": true,
+      "milliseconds": 1448
+    },
+    {
+      "name": "actual operation header agrees with comparison pair",
+      "source": "actual backend",
+      "passed": true,
+      "milliseconds": 1300
+    },
+    {
+      "name": "activity light accessibility and screenshot",
+      "source": "actual backend",
+      "passed": true,
+      "milliseconds": 3623
+    },
+    {
+      "name": "activity dark accessibility and screenshot",
+      "source": "actual backend",
+      "passed": true,
+      "milliseconds": 3266
+    },
+    {
+      "name": "activity initial route settlement after required responses",
+      "source": "actual backend",
+      "passed": true,
+      "milliseconds": 1708
+    },
+    {
+      "name": "activity 390px page reflow",
+      "source": "actual backend",
+      "passed": true,
+      "milliseconds": 1772
+    },
+    {
+      "name": "activity 768px page reflow",
+      "source": "actual backend",
+      "passed": true,
+      "milliseconds": 1431
+    },
+    {
+      "name": "activity 1440px page reflow",
+      "source": "actual backend",
+      "passed": true,
+      "milliseconds": 1413
+    },
+    {
+      "name": "activity 1920px page reflow",
+      "source": "actual backend",
+      "passed": true,
+      "milliseconds": 1476
+    },
+    {
+      "name": "comparison light accessibility and screenshot",
+      "source": "actual backend",
+      "passed": true,
+      "milliseconds": 25694
+    },
+    {
+      "name": "comparison dark accessibility and screenshot",
+      "source": "actual backend",
+      "passed": true,
+      "milliseconds": 25279
+    },
+    {
+      "name": "comparison initial route settlement after required responses",
+      "source": "actual backend",
+      "passed": true,
+      "milliseconds": 4129
+    },
+    {
+      "name": "comparison 390px page reflow",
+      "source": "actual backend",
+      "passed": true,
+      "milliseconds": 4740
+    },
+    {
+      "name": "comparison 768px page reflow",
+      "source": "actual backend",
+      "passed": true,
+      "milliseconds": 4565
+    },
+    {
+      "name": "comparison 1440px page reflow",
+      "source": "actual backend",
+      "passed": true,
+      "milliseconds": 4456
+    },
+    {
+      "name": "comparison 1920px page reflow",
+      "source": "actual backend",
+      "passed": true,
+      "milliseconds": 5191
+    },
+    {
+      "name": "operation light accessibility and screenshot",
+      "source": "actual backend",
+      "passed": true,
+      "milliseconds": 3955
+    },
+    {
+      "name": "operation dark accessibility and screenshot",
+      "source": "actual backend",
+      "passed": true,
+      "milliseconds": 3244
+    },
+    {
+      "name": "operation initial route settlement after required responses",
+      "source": "actual backend",
+      "passed": true,
+      "milliseconds": 1545
+    },
+    {
+      "name": "operation 390px page reflow",
+      "source": "actual backend",
+      "passed": true,
+      "milliseconds": 1788
+    },
+    {
+      "name": "operation 768px page reflow",
+      "source": "actual backend",
+      "passed": true,
+      "milliseconds": 1710
+    },
+    {
+      "name": "operation 1440px page reflow",
+      "source": "actual backend",
+      "passed": true,
+      "milliseconds": 1685
+    },
+    {
+      "name": "operation 1920px page reflow",
+      "source": "actual backend",
+      "passed": true,
+      "milliseconds": 2001
+    },
+    {
+      "name": "usage light accessibility and screenshot",
+      "source": "actual backend",
+      "passed": true,
+      "milliseconds": 3040
+    },
+    {
+      "name": "usage dark accessibility and screenshot",
+      "source": "actual backend",
+      "passed": true,
+      "milliseconds": 3135
+    },
+    {
+      "name": "usage initial route settlement after required responses",
+      "source": "actual backend",
+      "passed": true,
+      "milliseconds": 1211
+    },
+    {
+      "name": "usage 390px page reflow",
+      "source": "actual backend",
+      "passed": true,
+      "milliseconds": 1243
+    },
+    {
+      "name": "usage 768px page reflow",
+      "source": "actual backend",
+      "passed": true,
+      "milliseconds": 1221
+    },
+    {
+      "name": "usage 1440px page reflow",
+      "source": "actual backend",
+      "passed": true,
+      "milliseconds": 1230
+    },
+    {
+      "name": "usage 1920px page reflow",
+      "source": "actual backend",
+      "passed": true,
+      "milliseconds": 1408
+    },
+    {
+      "name": "profiles light accessibility and screenshot",
+      "source": "actual backend",
+      "passed": true,
+      "milliseconds": 1458
+    },
+    {
+      "name": "profiles dark accessibility and screenshot",
+      "source": "actual backend",
+      "passed": true,
+      "milliseconds": 1404
+    },
+    {
+      "name": "profiles initial route settlement after required responses",
+      "source": "actual backend",
+      "passed": true,
+      "milliseconds": 308
+    },
+    {
+      "name": "profiles 390px page reflow",
+      "source": "actual backend",
+      "passed": true,
+      "milliseconds": 362
+    },
+    {
+      "name": "profiles 768px page reflow",
+      "source": "actual backend",
+      "passed": true,
+      "milliseconds": 412
+    },
+    {
+      "name": "profiles 1440px page reflow",
+      "source": "actual backend",
+      "passed": true,
+      "milliseconds": 390
+    },
+    {
+      "name": "profiles 1920px page reflow",
+      "source": "actual backend",
+      "passed": true,
+      "milliseconds": 469
+    },
+    {
+      "name": "settings light accessibility and screenshot",
+      "source": "actual backend",
+      "passed": true,
+      "milliseconds": 2391
+    },
+    {
+      "name": "settings dark accessibility and screenshot",
+      "source": "actual backend",
+      "passed": true,
+      "milliseconds": 2071
+    },
+    {
+      "name": "settings initial route settlement after required responses",
+      "source": "actual backend",
+      "passed": true,
+      "milliseconds": 444
+    },
+    {
+      "name": "settings 390px page reflow",
+      "source": "actual backend",
+      "passed": true,
+      "milliseconds": 527
+    },
+    {
+      "name": "settings 768px page reflow",
+      "source": "actual backend",
+      "passed": true,
+      "milliseconds": 485
+    },
+    {
+      "name": "settings 1440px page reflow",
+      "source": "actual backend",
+      "passed": true,
+      "milliseconds": 541
+    },
+    {
+      "name": "settings 1920px page reflow",
+      "source": "actual backend",
+      "passed": true,
+      "milliseconds": 575
+    },
+    {
+      "name": "200% equivalent CSS reflow and reduced motion",
+      "source": "actual backend",
+      "passed": true,
+      "milliseconds": 3975
+    },
+    {
+      "name": "actual case outcome dialog explains lower reads with policy failure; keyboard focus return",
+      "source": "actual backend",
+      "passed": true,
+      "milliseconds": 5562
+    },
+    {
+      "name": "approximate comparison caveat remains prominent",
+      "source": "intercepted approximate DTO based on actual comparison; not journal-derived cross-condition proof",
+      "passed": true,
+      "milliseconds": 3713
+    },
+    {
+      "name": "copy baseline/candidate preserves actual stored SQL and manual fallback focus",
+      "source": "actual stored SQL; intercepted Clipboard write failure for manual-copy branch",
+      "passed": true,
+      "milliseconds": 2670
+    },
+    {
+      "name": "large SQL and long subject stay bounded and preserve original copy",
+      "source": "intercepted large SQL and long subject in actual detail DTO",
+      "passed": true,
+      "milliseconds": 1572
+    },
+    {
+      "name": "rejected operation shows reason without fabricating successful evidence",
+      "source": "intercepted rejected operation based on actual failed detail",
+      "passed": true,
+      "milliseconds": 648
+    },
+    {
+      "name": "delayed comparison has local loading feedback then settles",
+      "source": "actual backend comparison with 1200ms intercepted delay, excluded from CPU timings",
+      "passed": true,
+      "milliseconds": 4292
+    },
+    {
+      "name": "empty Activity journal view has usable filter/search next step",
+      "source": "intercepted empty journal pages; actual shell and UI",
+      "passed": true,
+      "milliseconds": 1160
+    },
+    {
+      "name": "disconnect feedback and reconnect restore actual route",
+      "source": "intercepted transport outage and removal; actual backend on retry",
+      "passed": true,
+      "milliseconds": 1744
+    },
+    {
+      "name": "profile editor and intercepted save failure retain next step",
+      "source": "intercepted PUT failure; actual GET profile, no persistent write",
+      "passed": true,
+      "milliseconds": 513
+    },
+    {
+      "name": "intercepted operation HTTP 401 feedback",
+      "source": "intercepted transient HTTP response",
+      "passed": true,
+      "milliseconds": 280
+    },
+    {
+      "name": "intercepted operation HTTP 408 feedback",
+      "source": "intercepted transient HTTP response",
+      "passed": true,
+      "milliseconds": 311
+    },
+    {
+      "name": "intercepted operation HTTP 500 feedback",
+      "source": "intercepted transient HTTP response",
+      "passed": true,
+      "milliseconds": 3684
+    },
+    {
+      "name": "intercepted approval request keyboard focus return; no decision sent",
+      "source": "intercepted SSE snapshot; no approval/denial sent",
+      "passed": true,
+      "milliseconds": 3757
+    }
+  ],
+  "errors": [],
+  "accessibility": [
+    {
+      "name": "activity-light",
+      "violations": [],
+      "incompleteRuleCount": 2,
+      "passedRuleCount": 23,
+      "measuredContrastTotal": 449
+    },
+    {
+      "name": "activity-dark",
+      "violations": [],
+      "incompleteRuleCount": 2,
+      "passedRuleCount": 23,
+      "measuredContrastTotal": 449
+    },
+    {
+      "name": "comparison-light",
+      "violations": [],
+      "incompleteRuleCount": 2,
+      "passedRuleCount": 32,
+      "measuredContrastTotal": 3730
+    },
+    {
+      "name": "comparison-dark",
+      "violations": [],
+      "incompleteRuleCount": 2,
+      "passedRuleCount": 32,
+      "measuredContrastTotal": 3730
+    },
+    {
+      "name": "operation-light",
+      "violations": [],
+      "incompleteRuleCount": 2,
+      "passedRuleCount": 27,
+      "measuredContrastTotal": 78
+    },
+    {
+      "name": "operation-dark",
+      "violations": [],
+      "incompleteRuleCount": 2,
+      "passedRuleCount": 27,
+      "measuredContrastTotal": 78
+    },
+    {
+      "name": "usage-light",
+      "violations": [],
+      "incompleteRuleCount": 3,
+      "passedRuleCount": 26,
+      "measuredContrastTotal": 209
+    },
+    {
+      "name": "usage-dark",
+      "violations": [],
+      "incompleteRuleCount": 3,
+      "passedRuleCount": 26,
+      "measuredContrastTotal": 209
+    },
+    {
+      "name": "profiles-light",
+      "violations": [],
+      "incompleteRuleCount": 0,
+      "passedRuleCount": 24,
+      "measuredContrastTotal": 40
+    },
+    {
+      "name": "profiles-dark",
+      "violations": [],
+      "incompleteRuleCount": 0,
+      "passedRuleCount": 24,
+      "measuredContrastTotal": 40
+    },
+    {
+      "name": "settings-light",
+      "violations": [],
+      "incompleteRuleCount": 0,
+      "passedRuleCount": 26,
+      "measuredContrastTotal": 120
+    },
+    {
+      "name": "settings-dark",
+      "violations": [],
+      "incompleteRuleCount": 0,
+      "passedRuleCount": 26,
+      "measuredContrastTotal": 120
+    },
+    {
+      "name": "synthetic-approval",
+      "violations": [],
+      "incompleteRuleCount": 2,
+      "passedRuleCount": 25,
+      "measuredContrastTotal": 785
+    }
+  ],
+  "performanceSkipped": true,
+  "scope": "functional/browser checks; performance intentionally excluded",
+  "host": {
+    "hostname": "RobertG",
+    "platform": "win32",
+    "release": "10.0.19045",
+    "architecture": "x64",
+    "cpus": 8,
+    "cpu": "Intel(R) Core(TM) i7-4700MQ CPU @ 2.40GHz",
+    "memoryGiB": 16,
+    "browser": "156.0.8078.4"
+  },
+  "fixture": {
+    "sessions": 500,
+    "operations": 10000,
+    "primarySessionOperations": 1000,
+    "versions": 50,
+    "cases": 20,
+    "seededAt": "2026-11-13T09:21:37.550Z",
+    "schemaVersion": 26
+  },
+  "limitations": [
+    "Automated browser evidence is not a screen-reader or usability study; screen-reader acceptance remains pending.",
+    "Local synthetic journal measurements do not establish production performance.",
+    "axe colour contrast covers text where determinable; a complete manual non-text contrast audit remains pending.",
+    "Browser zoom is approximated by equivalent 720 CSS-pixel reflow at a 1440 physical-pixel viewport; native browser 200% zoom remains pending."
+  ]
+}

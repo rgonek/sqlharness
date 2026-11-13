@@ -1,4 +1,4 @@
-import { useState } from "react"
+import { useState, type ReactNode } from "react"
 import { NotFoundError } from "@/api/client"
 import { useSessionSqlText } from "@/api/queries"
 import type { AgentSessionKey } from "@/api/types"
@@ -29,8 +29,10 @@ function sideState(version: string, query: ReturnType<typeof useSessionSqlText>)
   return null
 }
 
-export function SessionVersionDiff({ sessionId, engine, options, initialFrom, initialTo, agentSessionKey, selectionControls = true }: {
+export function SessionVersionDiff({ sessionId, engine, options, initialFrom, initialTo, agentSessionKey, selectionControls = true, baselineActions, candidateActions }: {
   sessionId: number
+  baselineActions?: ReactNode
+  candidateActions?: ReactNode
   agentSessionKey?: AgentSessionKey
   engine: string | null
   options: SqlVersionOption[]
@@ -102,6 +104,7 @@ export function SessionVersionDiff({ sessionId, engine, options, initialFrom, in
         </Select>
       </label>
     </div> : null}
+    {(baselineActions || candidateActions) && <div className="grid gap-3 sm:grid-cols-2"><div>{baselineActions}{fromText !== null && <CopyButton showLabel label="Copy baseline SQL" getText={() => fromText} />}</div><div>{candidateActions}{toText !== null && <CopyButton showLabel label="Copy candidate SQL" getText={() => toText} />}</div></div>}
     <div className="space-y-3">
       {fromState}
       {toState}

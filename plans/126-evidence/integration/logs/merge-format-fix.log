@@ -1,0 +1,3 @@
+pwsh ./scripts/format-changed.ps1 -Fix
+format: 11 changed C# file(s) (working-tree)
+format: OK

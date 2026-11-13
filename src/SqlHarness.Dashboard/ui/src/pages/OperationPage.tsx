@@ -17,7 +17,6 @@ import { CompareDetail } from "@/components/CompareDetail"
 import { ConditionsList } from "@/components/ConditionsList"
 import { ReproScriptButtons } from "@/components/ReproScriptButtons"
 import { displayCaseLabel } from "@/lib/caseLabel"
-import { describeError } from "@/lib/errors"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
@@ -28,6 +27,7 @@ import { Skeleton } from "@/components/ui/skeleton"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { variantLabel } from "@/lib/compare"
 import { formatDuration, formatNumber, formatTimestamp } from "@/lib/format"
+import { describeError } from "@/lib/errors"
 import { agentLabel } from "@/lib/agents"
 import { parseRouteId } from "@/lib/routeId"
 import { sessionSearchFromOperation } from "@/lib/sessionSearch"
@@ -45,12 +45,11 @@ function OperationHeading({ detail, returnSearch, metadata }: { detail: Operatio
   const title = op.operation === "compare" ? `${detail.compareSubject ?? "Unassigned compare"} · ${detail.baselineVersion ?? "?"} → ${detail.candidateVersion ?? "?"}` : op.agentLabel ?? op.subject ?? `Operation #${op.id}`
   return <div className="operation-heading">
     <div className="operation-breadcrumb"><Link to="/">Activity</Link><span>/</span>{returnAgent ? <Link to="/agent-sessions/$kind/$id" params={{ kind: returnAgent.agentKind, id: returnAgent.conversationId }} search={sessionSearchFromOperation(returnSearch)}>Back to agent session</Link> : <Link to="/sessions/$id" params={{ id: String(op.sessionId) }} search={returnSearch.returnSession === op.sessionId ? sessionSearchFromOperation(returnSearch) : undefined}>{detail.session.title ?? detail.session.sessionKey}</Link>}<span>/</span><span>#{op.id}</span></div>
-    <div className="flex items-center gap-2"><h1 aria-label={title} className="min-w-0 flex-1">{op.operation === "compare" ? <>{detail.compareSubject ?? "Unassigned compare"} · <span className="heading-version-pair">{detail.baselineVersion ?? "?"} → {detail.candidateVersion ?? "?"}</span></> : title}{op.agentKeep && <HugeiconsIcon icon={SparklesIcon} strokeWidth={2} className="ml-2 inline size-4 text-violet-600" aria-label="Kept by agent" />}</h1><Button variant="ghost" size="icon-sm" aria-label={op.ownerStarred ? "★ Owner starred" : "☆ Star operation"} aria-pressed={op.ownerStarred} disabled={update.isPending} onClick={() => update.mutate({ starred: !op.ownerStarred })}><HugeiconsIcon icon={StarIcon} strokeWidth={2} className={op.ownerStarred ? "fill-amber-400 text-amber-500" : ""} /></Button>{detail.sqlText && <CopyButton label="Copy stored SQL" getText={() => detail.sqlText!} />}<details className="operation-owner-menu"><summary aria-label="Operation actions"><HugeiconsIcon icon={MoreHorizontalCircle01Icon} strokeWidth={2} className="size-4" /></summary><div><OperationOwnerAnnotations key={op.id} operation={op} /></div></details></div>
+    <div className="flex items-center gap-2"><h1 aria-label={title} className="min-w-0 flex-1">{op.operation === "compare" ? <>{detail.compareSubject ?? "Unassigned compare"} · <span className="heading-version-pair">{detail.baselineVersion ?? "?"} → {detail.candidateVersion ?? "?"}</span></> : title}{op.agentKeep && <HugeiconsIcon icon={SparklesIcon} strokeWidth={2} className="ml-2 inline size-4 text-violet-600" aria-label="Kept by agent" />}</h1><Button variant="ghost" size="icon-sm" aria-label={op.ownerStarred ? "★ Owner starred" : "☆ Star operation"} aria-pressed={op.ownerStarred} disabled={update.isPending} onClick={() => update.mutate({ starred: !op.ownerStarred })}><HugeiconsIcon icon={StarIcon} strokeWidth={2} className={op.ownerStarred ? "fill-current text-star" : ""} /></Button>{detail.sqlText && <CopyButton label="Copy stored SQL" getText={() => detail.sqlText!} />}<details className="operation-owner-menu"><summary aria-label="Operation actions"><HugeiconsIcon icon={MoreHorizontalCircle01Icon} strokeWidth={2} className="size-4" /></summary><div><OperationOwnerAnnotations key={op.id} operation={op} /></div></details></div>
     <div className="operation-subtitle"><StatusBadge operation={op} /><span className="capitalize">{op.operation} #{op.id}</span>{op.operation === "compare" && <><span>·</span><span>{detail.compareScope === "whole" ? "whole query" : detail.compareScope ?? "Unassigned scope"}</span></>}<span>·</span><span>{agentLabel(op.agentKind)}</span><code>{detail.session.transport}</code><span>·</span><time title={op.startedAt}>{formatTimestamp(op.startedAt)}</time><span>·</span><span>{formatDuration(op.durationMs)}</span><span>·</span><span>{op.profile && <>{op.profile} / </>}<span>{op.database ?? "—"}</span></span><FlagBadges operation={op} />{metadata && <><span>·</span>{metadata}</>}</div>
-    {(op.status === "failed" || op.status === "rejected" || op.status === "cancelled") && <div role="alert" className="mt-2 rounded-md border p-3 text-sm">
-      <p>{describeError(op.exitCode, op.errorKind ?? (op.status === "cancelled" ? "cancelled" : null), op.cancelReason)}</p>
-      {op.errorMessage !== null ? <pre className="mt-1 max-h-96 overflow-auto whitespace-pre-wrap break-words">{op.errorMessage}</pre>
-        : <p>No error message is available for this operation.</p>}
+    {["failed", "rejected", "cancelled", "abandoned"].includes(op.status) && <div role="alert" className="space-y-1 rounded-md border border-destructive/30 bg-destructive/5 p-3 text-sm">
+      <p className="font-medium">{describeError(op.exitCode, op.errorKind ?? (op.status === "cancelled" ? "cancelled" : null), op.cancelReason)}</p>
+      {op.errorMessage ? <p className="whitespace-pre-wrap break-words">{op.errorMessage}</p> : <p>No error message is available for this operation.</p>}
     </div>}
     {update.error && <p role="alert" className="text-sm text-destructive">Could not save operation annotations: {update.error.message}</p>}
   </div>
@@ -179,12 +178,14 @@ export function OperationPage() {
 function OperationView({ id, returnSearch }: { id: number; returnSearch: OperationDetailSearch }) {
   const query = useOperation(id)
 
-  if (query.error) return <ErrorState error={query.error} />
+  if (query.error) return <ErrorState error={query.error} onRetry={() => void query.refetch()} retrying={query.isFetching} />
   if (query.isPending) return <Skeleton className="h-64 w-full" />
 
   const detail = query.data
   const op = detail.operation
-  if (op.operation === "compare" && op.status === "succeeded") return <CompareOperationView id={id} detail={detail} returnSearch={returnSearch} />
+  if (op.operation === "compare") return op.status === "succeeded"
+    ? <CompareOperationView id={id} detail={detail} returnSearch={returnSearch} />
+    : <UnavailableComparison detail={detail} returnSearch={returnSearch} />
   const hasPlanParameterSet = returnSearch.planParameterSetNull === true || returnSearch.planParameterSet !== undefined
   const planTarget = hasPlanParameterSet && returnSearch.planCase !== undefined && returnSearch.planRepetition !== undefined
     && returnSearch.planDocument !== undefined && returnSearch.planStatement !== undefined
@@ -339,6 +340,16 @@ function OperationView({ id, returnSearch }: { id: number; returnSearch: Operati
   )
 }
 
+function UnavailableComparison({ detail, returnSearch, feedback }: { detail: OperationDetail; returnSearch: OperationDetailSearch; feedback?: ReactNode }) {
+  return <div className="operation-page space-y-4">
+    <OperationHeading detail={detail} returnSearch={returnSearch} />
+    {feedback ?? <p role="status" className="text-sm text-muted-foreground">No eligible successful comparison evidence is retained for this attempt. Recorded operation details remain available.</p>}
+    <CompareDetail detail={detail} />
+    {detail.variants.length > 0 && <section aria-label="Retained partial measurements" className="space-y-3"><h2 className="font-medium">Retained partial measurements</h2>{detail.variants.map(variant => <VariantPanel key={variant.ordinal} operationId={detail.operation.id} variant={variant} engine={detail.operation.engine} />)}</section>}
+    <StoredSqlReuse detail={detail} />
+  </div>
+}
+
 function CompareOperationView({ id, detail, returnSearch }: { id: number; detail: OperationDetail; returnSearch: OperationDetailSearch }) {
   const op = detail.operation
   const navigate = useNavigate({ from: "/operations/$id" })
@@ -350,13 +361,13 @@ function CompareOperationView({ id, detail, returnSearch }: { id: number; detail
   const returnSession = returnSearch.returnSession === op.sessionId ? returnSearch.returnSession : undefined
   const returnAgent = agentReturnKey(returnSearch)
   const returnLink = returnAgent ? <Link aria-label="Back to session Optimization" to="/agent-sessions/$kind/$id" params={{ kind: returnAgent.agentKind, id: returnAgent.conversationId }} search={sessionSearchFromOperation(returnSearch)} className="underline">Open in session Optimization →</Link> : <Link aria-label="Back to session Optimization" to="/sessions/$id" params={{ id: String(op.sessionId) }} search={returnSession ? sessionSearchFromOperation(returnSearch) : undefined} className="underline">Open in session Optimization →</Link>
-  if (comparison.error) return <ErrorState error={comparison.error} />
+  if (comparison.error) return <UnavailableComparison detail={detail} returnSearch={returnSearch} feedback={comparison.error instanceof NotFoundError ? undefined : <ErrorState error={comparison.error} onRetry={() => void comparison.refetch()} retrying={comparison.isFetching} />} />
   return <div className="operation-page space-y-4">
     <OperationHeading detail={detail} returnSearch={returnSearch} />
 
     <ComparisonPending pending={comparison.isPlaceholderData}><div className="operation-metrics" aria-label="Operation metrics">
       <Fact label="Logical reads">{formatNumber(comparison.data?.wholeBatch?.after ?? op.logicalReadsMedian)}</Fact>
-      <Fact label="Elapsed median">{formatDuration(comparison.data?.elapsed.afterMs ?? null)}</Fact>
+      <Fact label={`Elapsed (${selectedCase === "all" ? `${aggregate === "mean" ? "mean" : "sum"} of case medians` : "median"})`}>{formatDuration(comparison.data?.elapsed.afterMs ?? null)}</Fact>
       <Fact label="CPU">{formatDuration(comparison.data?.cpuAfterMs ?? null)}</Fact>
       <Fact label="Results">{comparison.data?.equivalenceLabel ?? "—"}</Fact>
     </div></ComparisonPending>
@@ -375,7 +386,7 @@ function CompareOperationView({ id, detail, returnSearch }: { id: number; detail
       </CardContent></Card>}
     </div></CollapsibleContent></Collapsible></>} diff={<SqlDiff embedded baseline={detail.sqlText} candidate={detail.candidateSqlText} engine={op.engine} />} timing={<OperationTimings detail={detail} />}
         searchState={{ case: selectedCase, agg: aggregate, view }} sessionSearch={sessionSearchFromOperation(returnSearch)}
-        onSelectionChange={patch => { void navigate({ search: previous => ({ ...previous, ...patch }), resetScroll: false }) }} />
+        onSelectionChange={(patch, options) => { void navigate({ search: previous => ({ ...previous, ...patch }), replace: options?.replace, resetScroll: false }) }} />
 
     </> : null}
     <StoredSqlReuse detail={detail} />

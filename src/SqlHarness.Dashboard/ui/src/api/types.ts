@@ -170,7 +170,35 @@ export type ConditionsGroup = {
   subject: string | null; database: string | null
 }
 export type ScopeVersions = { scope: string; versions: OptimizationVersion[]; defaultA: string | null; defaultB: string | null }
+export type OutcomeCounts = {
+  resultsEquivalent: number; resultsDifferent: number; resultsUnavailable: number
+  ioBetter: number; ioSame: number; ioWorse: number; ioUnavailable: number
+  policyPass: number; policyFail: number; policyUnavailable: number
+}
+export type CaseOutcomeDetail = {
+  id?: string; caseCount?: number
+  caseKey: string; label: string; resultsEquivalent: boolean | null; ioOutcome: string
+  policyVerdict: string | null; policyUnavailableReason: string | null; policyReasons: string[]
+  readsBefore: number | null; readsAfter: number | null
+  elapsedBeforeMs: number | null; elapsedAfterMs: number | null; cpuBeforeMs: number | null; cpuAfterMs: number | null
+}
+export type VersionCaseMetric = {
+  caseKey: string; caseId: string; label: string; varyingFingerprint?: string | null
+  logicalReads: number | null; scans: number | null; elapsedMs: number | null; cpuMs: number | null
+}
+export type CaseMetricAvailability = { status: string; reason: string | null; contributingCases: number; selectedCases: number }
+export type ComparisonTableRow = {
+  table: string; scansBefore: number | null; scansAfter: number | null; readsBefore: number | null; readsAfter: number | null; change: string
+  dataLogicalReadsBefore?: number | null; dataLogicalReadsAfter?: number | null
+  lobLogicalReadsBefore?: number | null; lobLogicalReadsAfter?: number | null
+  pageServerReadsBefore?: number | null; pageServerReadsAfter?: number | null
+  physicalReadsBefore?: number | null; physicalReadsAfter?: number | null
+  readAheadReadsBefore?: number | null; readAheadReadsAfter?: number | null
+  lobPhysicalReadsBefore?: number | null; lobPhysicalReadsAfter?: number | null
+  lobReadAheadReadsBefore?: number | null; lobReadAheadReadsAfter?: number | null
+}
 export type OptimizationVersion = {
+  outcomes?: OutcomeCounts | null; caseOutcomes?: CaseOutcomeDetail[]; metricCases?: VersionCaseMetric[]; cpuMedianMs?: number | null
   version: string; hash: string; logicalReadsSum: number | null; logicalReadsMean: number | null; scansSum: number | null
   caseTimings?: { id: string; varyingId?: string | null; elapsedMedianMs: number | null; cpuMedianMs: number | null }[]
   rowsReturnedSum?: number | null; rowsReturnedVaries?: boolean
@@ -196,8 +224,9 @@ export type StatementRow = {
   hasSpillWarningBefore?: boolean | null; hasSpillWarningAfter?: boolean | null
   planRepetitionBefore?: number | null; planRepetitionAfter?: number | null
   udfElapsedMilliseconds: number | null
+  metricAvailabilityBefore?: Record<string, CaseMetricAvailability>; metricAvailabilityAfter?: Record<string, CaseMetricAvailability>
 }
-export type OutcomeCounts = {
+export type NestedOutcomeCounts = {
   total: number; results: { equivalent: number; different: number; unavailable: number }
   io: { better: number; same: number; worse: number; unavailable: number }
   policy: { pass: number; fail: number; unavailable: number }
@@ -208,20 +237,20 @@ export type CaseOutcome = {
   cpuBeforeMs: number | null; cpuAfterMs: number | null; policyVerdict: string | null; policyReasons: string[]; policyUnavailableReason: string | null
 }
 export type OptimizationComparison = {
+  outcomes?: OutcomeCounts | null; caseOutcomes?: CaseOutcomeDetail[]
   a: string; b: string; basis: "MeasuredTogether" | "DifferentRunsSameConditions" | "ConditionsDiffer" | "SameSql" | "ApproximateAcrossConditions"
   groupA?: string | null; groupB?: string | null; groupLabelA?: string | null; groupLabelB?: string | null
-  outcomeCounts?: OutcomeCounts
-  caseOutcomes?: CaseOutcome[]
+  outcomeCounts?: NestedOutcomeCounts
   timingContributors?: { id: string; elapsedBeforeMs: number | null; elapsedAfterMs: number | null; cpuBeforeMs: number | null; cpuAfterMs: number | null }[]
   caseRows?: { caseKey: string; labelA: string; labelB: string; rowsA: number | null; rowsB: number | null; rowsAVaries: boolean; rowsBVaries: boolean }[]
   operationId: number | null; equivalenceLabel: string; cases: { id: string; label: string; outcome: string }[]
   selectedCase: string; aggregate: string; coverageLabel: string; statementMetricsUnavailableReason?: string | null
   versionLabelsProvisional?: boolean; versionLabelNote?: string | null
   mixed: { better: number; worse: number; worstCaseLabel: string; worstChangePercent: number } | null
-  tables: { table: string; scansBefore: number | null; scansAfter: number | null; readsBefore: number | null; readsAfter: number | null; change: string; dataLogicalReadsBefore?: number | null; dataLogicalReadsAfter?: number | null; physicalReadsBefore?: number | null; physicalReadsAfter?: number | null; pageServerReadsBefore?: number | null; pageServerReadsAfter?: number | null; readAheadReadsBefore?: number | null; readAheadReadsAfter?: number | null; lobLogicalReadsBefore?: number | null; lobLogicalReadsAfter?: number | null; lobPhysicalReadsBefore?: number | null; lobPhysicalReadsAfter?: number | null; lobReadAheadReadsBefore?: number | null; lobReadAheadReadsAfter?: number | null }[]
+  tables: ComparisonTableRow[]
   collapsed: { count: number; label: string } | null
   elapsed: { beforeMs: number | null; afterMs: number | null; policyVerdict: string | null; differentRun: boolean }
-  tableIoUnavailable?: boolean; cpuBeforeMs?: number | null; cpuAfterMs?: number | null
+  tableIoUnavailable?: boolean; cpuBeforeMs?: number | null; cpuAfterMs?: number | null; scansBefore?: number | null; scansAfter?: number | null
   buffersBefore?: PostgresBuffers | null; buffersAfter?: PostgresBuffers | null
   beforeAction?: OptimizationActionReference | null; afterAction?: OptimizationActionReference | null
   verdictBasis?: "changed statements" | "whole batch"

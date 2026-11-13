@@ -36,6 +36,8 @@ public sealed record ScopeVersions(string Scope, IReadOnlyList<VersionRow> Versi
     public string? DefaultB { get; init; }
 }
 
+/// <summary>Default metrics cover all recorded cases. ElapsedMedianMs and CpuMedianMs are sums of case medians;
+/// MetricCases preserves each representative and its identities for selected-case sum/mean presentation.</summary>
 public sealed record VersionRow(
     string Version,
     string Hash,
@@ -47,15 +49,14 @@ public sealed record VersionRow(
     IReadOnlyList<long> MeasuredIn,
     long LatestOperationId)
 {
-    public IReadOnlyList<VersionCaseTiming> CaseTimings { get; init; } = [];
     public string VerdictBasis { get; init; } = "whole batch";
     public long? RowsReturnedSum { get; init; }
     public bool RowsReturnedVaries { get; init; }
-}
-
-public sealed record VersionCaseTiming(string Id, long? ElapsedMedianMs, double? CpuMedianMs)
-{
-    public string? VaryingId { get; init; }
+    public double? CpuMedianMs { get; init; }
+    public IReadOnlyList<VersionCaseTiming> CaseTimings { get; init; } = [];
+    public IReadOnlyList<VersionCaseMetric> MetricCases { get; init; } = [];
+    public OutcomeCounts Outcomes { get; init; } = new(0, 0, 0, 0, 0, 0, 0, 0, 0, 0);
+    public IReadOnlyList<CaseOutcomeDetail> CaseOutcomes { get; init; } = [];
 }
 
 public sealed record UnassignedCompare(long OperationId, string StartedAt, string Status);
@@ -88,9 +89,10 @@ public sealed record CompareCaseEvidence(
     bool? ResultsEquivalent,
     string? RegressionVerdict)
 {
-    public IReadOnlyList<string> RegressionReasons { get; init; } = [];
     public string? MeasurementFingerprint { get; init; }
     public string? VaryingFingerprint { get; init; }
+    public IReadOnlyList<string> RegressionReasons { get; init; } = [];
+    public IReadOnlyList<string> PolicyReasons { get; init; } = [];
 }
 
 /// <summary>One baseline or candidate per-case metric row and its journaled per-table IO rows.</summary>
@@ -103,6 +105,7 @@ public sealed record CompareMetricEvidence(
     long? ScansSum,
     IReadOnlyList<CompareTableIoEvidence> TableRows)
 {
+    internal bool CaseIdentityAmbiguous { get; init; }
     public long? RowsReturned { get; init; }
     public int? ResultSets { get; init; }
     public bool RowsReturnedVaries { get; init; }
@@ -117,8 +120,8 @@ public sealed record CompareMetricEvidence(
 
 public sealed record CompareTableIoEvidence(string Table, long LogicalReads, long? LobLogicalReads, long? Scans)
 {
-    public long? PhysicalReads { get; init; }
     public long? PageServerReads { get; init; }
+    public long? PhysicalReads { get; init; }
     public long? ReadAheadReads { get; init; }
     public long? LobPhysicalReads { get; init; }
     public long? LobReadAheadReads { get; init; }
@@ -129,7 +132,6 @@ public sealed record CompareStatementEvidence(
     IReadOnlyList<TableRow> Objects)
 {
     public double? UdfElapsedMilliseconds { get; init; }
-    public bool RuntimeEvidenceEligible { get; init; }
     public long? CpuMs { get; init; }
     public long? ElapsedMs { get; init; }
     public long? GrantRequestedKb { get; init; }
@@ -138,6 +140,8 @@ public sealed record CompareStatementEvidence(
     public bool? HasSpillWarning { get; init; }
     public int? PlanRepetition { get; init; }
     public string? PlanLink { get; init; }
+    public bool RuntimeEvidenceEligible { get; init; }
+    public bool? EvidenceEligible { get; init; }
 }
 
 [JsonConverter(typeof(JsonStringEnumConverter<PairBasis>))]
@@ -153,25 +157,17 @@ public sealed record OptimizationComparison(
     public string? GroupLabelA { get; init; }
     public string? GroupLabelB { get; init; }
     public IReadOnlyList<CaseRows> CaseRows { get; init; } = [];
-    public IReadOnlyList<CaseOutcome> CaseOutcomes { get; init; } = [];
-    public IReadOnlyList<TimingContributor> TimingContributors { get; init; } = [];
-    public OutcomeCounts OutcomeCounts
-    {
-        get
-        {
-            var cases = SelectedCase == "all" ? CaseOutcomes : CaseOutcomes.Where(item => item.Id == SelectedCase).ToArray();
-            return new OutcomeCounts(cases.Count,
-                new ResultCounts(cases.Count(c => c.ResultsEquivalent == true), cases.Count(c => c.ResultsEquivalent == false), cases.Count(c => c.ResultsEquivalent is null)),
-                new IoCounts(cases.Count(c => c.IoOutcome == "better"), cases.Count(c => c.IoOutcome == "same"), cases.Count(c => c.IoOutcome == "worse"), cases.Count(c => c.IoOutcome == "unavailable")),
-                new PolicyCounts(cases.Count(c => c.PolicyVerdict == "pass"), cases.Count(c => c.PolicyVerdict == "fail"), cases.Count(c => c.PolicyVerdict is not ("pass" or "fail"))));
-        }
-    }
     public bool VersionLabelsProvisional { get; init; }
     public string? VersionLabelNote { get; init; }
     public string VerdictBasis { get; init; } = "whole batch";
     public string View { get; init; } = "changed";
     public WholeBatchLine WholeBatch { get; init; } = new(null, null, null, "");
     public IReadOnlyList<StatementRow> Statements { get; init; } = [];
+    public IReadOnlyList<TimingContributor> TimingContributors { get; init; } = [];
+    public NestedOutcomeCounts OutcomeCounts => new(CaseOutcomes.Sum(c => c.CaseCount),
+        new(Outcomes.ResultsEquivalent, Outcomes.ResultsDifferent, Outcomes.ResultsUnavailable),
+        new(Outcomes.IoBetter, Outcomes.IoSame, Outcomes.IoWorse, Outcomes.IoUnavailable),
+        new(Outcomes.PolicyPass, Outcomes.PolicyFail, Outcomes.PolicyUnavailable));
     public string? FallbackNote { get; init; }
     public string? StatementMetricsUnavailableReason { get; init; }
     public int OmittedStatementsBefore { get; init; }
@@ -181,8 +177,12 @@ public sealed record OptimizationComparison(
     public bool TableIoUnavailable { get; init; }
     public double? CpuBeforeMs { get; init; }
     public double? CpuAfterMs { get; init; }
+    public double? ScansBefore { get; init; }
+    public double? ScansAfter { get; init; }
     public PostgresBuffers? BuffersBefore { get; init; }
     public PostgresBuffers? BuffersAfter { get; init; }
+    public OutcomeCounts Outcomes { get; init; } = new(0, 0, 0, 0, 0, 0, 0, 0, 0, 0);
+    public IReadOnlyList<CaseOutcomeDetail> CaseOutcomes { get; init; } = [];
 }
 
 public sealed record WholeBatchLine(long? Before, long? After, long? Shared, string Label)
@@ -193,14 +193,10 @@ public sealed record WholeBatchLine(long? Before, long? After, long? Shared, str
     public long? ChangedAfter { get; init; }
 }
 
-public sealed record MetricAvailability(string Status, string? Reason, int AvailableCases, int TotalCases, string? Provenance = null);
-public sealed record MetricAvailabilityPair(MetricAvailability Before, MetricAvailability After);
-
 public sealed record StatementRow(string Key, string Text, string Status, long? ReadsBefore, long? ReadsAfter,
     long? ScansBefore, long? ScansAfter, long? Executions, string Change, string Attribution,
     IReadOnlyList<HiddenWork> HiddenWork, IReadOnlyList<TableRow> Objects)
 {
-    public IReadOnlyDictionary<string, MetricAvailabilityPair>? Availability { get; init; }
     public long? ExecutionsBefore { get; init; }
     public long? ExecutionsAfter { get; init; }
     public long? CpuBeforeMs { get; init; }
@@ -223,6 +219,9 @@ public sealed record StatementRow(string Key, string Text, string Status, long? 
     public string? PlanLinkBefore { get; init; }
     public string? PlanLinkAfter { get; init; }
     public double? UdfElapsedMilliseconds { get; init; }
+    public IReadOnlyDictionary<string, MetricAvailabilityPair>? Availability { get; init; }
+    public IReadOnlyDictionary<string, MetricAvailability> MetricAvailabilityBefore { get; init; } = new Dictionary<string, MetricAvailability>();
+    public IReadOnlyDictionary<string, MetricAvailability> MetricAvailabilityAfter { get; init; } = new Dictionary<string, MetricAvailability>();
 }
 
 public sealed record OptimizationActionReference(long OperationId, string Side, IReadOnlyList<string> CaseIds)
@@ -237,19 +236,6 @@ public sealed record CaseRows(string CaseKey, string LabelA, string LabelB, long
     public bool RowsBVaries { get; init; }
 }
 
-public sealed record OutcomeCounts(int Total, ResultCounts Results, IoCounts Io, PolicyCounts Policy);
-public sealed record ResultCounts(int Equivalent, int Different, int Unavailable);
-public sealed record IoCounts(int Better, int Same, int Worse, int Unavailable);
-public sealed record PolicyCounts(int Pass, int Fail, int Unavailable);
-
-public sealed record CaseOutcome(string Id, string Label, bool? ResultsEquivalent, string IoOutcome,
-    long? ReadsBefore, long? ReadsAfter, long? ElapsedBeforeMs, long? ElapsedAfterMs,
-    double? CpuBeforeMs, double? CpuAfterMs, string? PolicyVerdict, IReadOnlyList<string> PolicyReasons,
-    string? PolicyUnavailableReason);
-
-public sealed record TimingContributor(string Id, long? ElapsedBeforeMs, long? ElapsedAfterMs,
-    double? CpuBeforeMs, double? CpuAfterMs);
-
 public sealed record CaseOption(string Id, string Label, string Outcome);
 public sealed record MixedWarning(int Better, int Worse, string WorstCaseLabel, double WorstChangePercent);
 public sealed record TableRow(string Table, long? ScansBefore, long? ScansAfter, long? ReadsBefore, long? ReadsAfter, string Change)
@@ -257,20 +243,51 @@ public sealed record TableRow(string Table, long? ScansBefore, long? ScansAfter,
     public IReadOnlyDictionary<string, MetricAvailabilityPair>? Availability { get; init; }
     [JsonIgnore]
     public string? ObjectKind { get; init; }
+    public long? LobLogicalReadsBefore { get; init; }
+    public long? LobLogicalReadsAfter { get; init; }
     public long? DataLogicalReadsBefore { get; init; }
     public long? DataLogicalReadsAfter { get; init; }
-    public long? PhysicalReadsBefore { get; init; }
-    public long? PhysicalReadsAfter { get; init; }
     public long? PageServerReadsBefore { get; init; }
     public long? PageServerReadsAfter { get; init; }
+    public long? PhysicalReadsBefore { get; init; }
+    public long? PhysicalReadsAfter { get; init; }
     public long? ReadAheadReadsBefore { get; init; }
     public long? ReadAheadReadsAfter { get; init; }
     public long? LobPhysicalReadsBefore { get; init; }
     public long? LobPhysicalReadsAfter { get; init; }
     public long? LobReadAheadReadsBefore { get; init; }
     public long? LobReadAheadReadsAfter { get; init; }
-    public long? LobLogicalReadsBefore { get; init; }
-    public long? LobLogicalReadsAfter { get; init; }
 }
 public sealed record CollapsedRow(int Count, string Label);
 public sealed record ElapsedInfo(double? BeforeMs, double? AfterMs, string? PolicyVerdict, bool DifferentRun);
+
+public sealed record MetricAvailability(string Status, string? Reason, int ContributingCases, int SelectedCases, string? Provenance = null)
+{
+    public int AvailableCases => ContributingCases;
+    public int TotalCases => SelectedCases;
+}
+public sealed record MetricAvailabilityPair(MetricAvailability Before, MetricAvailability After);
+public sealed record VersionCaseMetric(string CaseKey, string CaseId, string Label, long? LogicalReads,
+    long? Scans, double? ElapsedMs, double? CpuMs)
+{
+    public string? VaryingFingerprint { get; init; }
+}
+public sealed record OutcomeCounts(int ResultsEquivalent, int ResultsDifferent, int ResultsUnavailable,
+    int IoBetter, int IoSame, int IoWorse, int IoUnavailable, int PolicyPass, int PolicyFail, int PolicyUnavailable);
+public sealed record CaseOutcomeDetail(string CaseKey, string Label, bool? ResultsEquivalent, string IoOutcome,
+    string? PolicyVerdict, string? PolicyUnavailableReason, IReadOnlyList<string> PolicyReasons,
+    long? ReadsBefore, long? ReadsAfter, double? ElapsedBeforeMs, double? ElapsedAfterMs,
+    double? CpuBeforeMs, double? CpuAfterMs)
+{
+    public string Id => CaseKey;
+    public int CaseCount { get; init; } = 1;
+}
+public sealed record VersionCaseTiming(string Id, long? ElapsedMedianMs, double? CpuMedianMs)
+{
+    public string? VaryingId { get; init; }
+}
+public sealed record TimingContributor(string Id, long? ElapsedBeforeMs, long? ElapsedAfterMs, double? CpuBeforeMs, double? CpuAfterMs);
+public sealed record NestedOutcomeCounts(int Total, ResultCounts Results, IoCounts Io, PolicyCounts Policy);
+public sealed record ResultCounts(int Equivalent, int Different, int Unavailable);
+public sealed record IoCounts(int Better, int Same, int Worse, int Unavailable);
+public sealed record PolicyCounts(int Pass, int Fail, int Unavailable);

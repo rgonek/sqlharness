@@ -1,0 +1,69 @@
+  SqlHarness.Core -> C:\Users\rgone\MultiCliProfiles\codex\account-b\worktrees\8723\sqlharness\src\SqlHarness.Core\bin\Debug\net10.0\SqlHarness.Core.dll
+  SqlHarness.Mcp -> C:\Users\rgone\MultiCliProfiles\codex\account-b\worktrees\8723\sqlharness\src\SqlHarness.Mcp\bin\Debug\net10.0\SqlHarness.Mcp.dll
+  SqlHarness.Dashboard -> C:\Users\rgone\MultiCliProfiles\codex\account-b\worktrees\8723\sqlharness\src\SqlHarness.Dashboard\bin\Debug\net10.0\SqlHarness.Dashboard.dll
+  SqlHarness.Cli -> C:\Users\rgone\MultiCliProfiles\codex\account-b\worktrees\8723\sqlharness\src\SqlHarness.Cli\bin\Debug\net10.0\sqlharness.dll
+  SqlHarness.Tests -> C:\Users\rgone\MultiCliProfiles\codex\account-b\worktrees\8723\sqlharness\tests\SqlHarness.Tests\bin\Debug\net10.0\SqlHarness.Tests.dll
+Test run for C:\Users\rgone\MultiCliProfiles\codex\account-b\worktrees\8723\sqlharness\tests\SqlHarness.Tests\bin\Debug\net10.0\SqlHarness.Tests.dll (.NETCoreApp,Version=v10.0)
+A total of 1 test files matched the specified pattern.
+[xUnit.net 00:00:03.58]     SqlHarness.Tests.Dashboard.OptimizationComparerTests.Colliding_case_fingerprints_never_select_last_metrics_or_drop_script_cases(independent: False, selection: "all") [FAIL]
+[xUnit.net 00:00:03.60]     SqlHarness.Tests.Dashboard.OptimizationComparerTests.Colliding_case_fingerprints_never_select_last_metrics_or_drop_script_cases(independent: True, selection: "repeat") [FAIL]
+[xUnit.net 00:00:03.61]     SqlHarness.Tests.Dashboard.OptimizationComparerTests.Colliding_case_fingerprints_never_select_last_metrics_or_drop_script_cases(independent: False, selection: "repeat") [FAIL]
+[xUnit.net 00:00:03.61]     SqlHarness.Tests.Dashboard.OptimizationComparerTests.Colliding_case_fingerprints_never_select_last_metrics_or_drop_script_cases(independent: True, selection: "all") [FAIL]
+[xUnit.net 00:00:03.62]     SqlHarness.Tests.Dashboard.OptimizationComparerTests.Across_conditions_duplicate_metric_representatives_keep_policy_metrics_and_selected_scripts_unavailable [FAIL]
+[xUnit.net 00:00:03.65]     SqlHarness.Tests.Dashboard.OptimizationComparerTests.Active_pair_scan_summary_uses_its_exact_direct_operation_and_selected_case_aggregate [FAIL]
+  Failed SqlHarness.Tests.Dashboard.OptimizationComparerTests.Colliding_case_fingerprints_never_select_last_metrics_or_drop_script_cases(independent: False, selection: "all") [241 ms]
+  Error Message:
+   Assert.Equal() Failure: Values differ
+Expected: 2
+Actual:   1
+  Stack Trace:
+     at SqlHarness.Tests.Dashboard.OptimizationComparerTests.Colliding_case_fingerprints_never_select_last_metrics_or_drop_script_cases(Boolean independent, String selection) in C:\Users\rgone\MultiCliProfiles\codex\account-b\worktrees\8723\sqlharness\tests\SqlHarness.Tests\Dashboard\OptimizationComparerTests.cs:line 29
+   at System.Reflection.MethodBaseInvoker.InterpretedInvoke_Method(Object obj, IntPtr* args)
+   at System.Reflection.MethodBaseInvoker.InvokeDirectByRefWithFewArgs(Object obj, Span`1 copyOfArgs, BindingFlags invokeAttr)
+  Failed SqlHarness.Tests.Dashboard.OptimizationComparerTests.Colliding_case_fingerprints_never_select_last_metrics_or_drop_script_cases(independent: True, selection: "repeat") [11 ms]
+  Error Message:
+   Assert.Equal() Failure: Values differ
+Expected: 2
+Actual:   1
+  Stack Trace:
+     at SqlHarness.Tests.Dashboard.OptimizationComparerTests.Colliding_case_fingerprints_never_select_last_metrics_or_drop_script_cases(Boolean independent, String selection) in C:\Users\rgone\MultiCliProfiles\codex\account-b\worktrees\8723\sqlharness\tests\SqlHarness.Tests\Dashboard\OptimizationComparerTests.cs:line 29
+   at InvokeStub_OptimizationComparerTests.Colliding_case_fingerprints_never_select_last_metrics_or_drop_script_cases(Object, Span`1)
+   at System.Reflection.MethodBaseInvoker.InvokeWithFewArgs(Object obj, BindingFlags invokeAttr, Binder binder, Object[] parameters, CultureInfo culture)
+  Failed SqlHarness.Tests.Dashboard.OptimizationComparerTests.Colliding_case_fingerprints_never_select_last_metrics_or_drop_script_cases(independent: False, selection: "repeat") [1 ms]
+  Error Message:
+   Assert.Equal() Failure: Values differ
+Expected: 2
+Actual:   1
+  Stack Trace:
+     at SqlHarness.Tests.Dashboard.OptimizationComparerTests.Colliding_case_fingerprints_never_select_last_metrics_or_drop_script_cases(Boolean independent, String selection) in C:\Users\rgone\MultiCliProfiles\codex\account-b\worktrees\8723\sqlharness\tests\SqlHarness.Tests\Dashboard\OptimizationComparerTests.cs:line 29
+   at InvokeStub_OptimizationComparerTests.Colliding_case_fingerprints_never_select_last_metrics_or_drop_script_cases(Object, Span`1)
+   at System.Reflection.MethodBaseInvoker.InvokeWithFewArgs(Object obj, BindingFlags invokeAttr, Binder binder, Object[] parameters, CultureInfo culture)
+  Failed SqlHarness.Tests.Dashboard.OptimizationComparerTests.Colliding_case_fingerprints_never_select_last_metrics_or_drop_script_cases(independent: True, selection: "all") [1 ms]
+  Error Message:
+   Assert.Equal() Failure: Values differ
+Expected: 2
+Actual:   1
+  Stack Trace:
+     at SqlHarness.Tests.Dashboard.OptimizationComparerTests.Colliding_case_fingerprints_never_select_last_metrics_or_drop_script_cases(Boolean independent, String selection) in C:\Users\rgone\MultiCliProfiles\codex\account-b\worktrees\8723\sqlharness\tests\SqlHarness.Tests\Dashboard\OptimizationComparerTests.cs:line 29
+   at InvokeStub_OptimizationComparerTests.Colliding_case_fingerprints_never_select_last_metrics_or_drop_script_cases(Object, Span`1)
+   at System.Reflection.MethodBaseInvoker.InvokeWithFewArgs(Object obj, BindingFlags invokeAttr, Binder binder, Object[] parameters, CultureInfo culture)
+  Failed SqlHarness.Tests.Dashboard.OptimizationComparerTests.Across_conditions_duplicate_metric_representatives_keep_policy_metrics_and_selected_scripts_unavailable [31 ms]
+  Error Message:
+   Assert.Null() Failure: Value is not null
+Expected: null
+Actual:   OptimizationActionReference { OperationId = 2, Side = measure, CaseIds = System.String[], CaseIdsByFingerprint = System.Collections.Generic.Dictionary`2[System.String,System.String] }
+  Stack Trace:
+     at SqlHarness.Tests.Dashboard.OptimizationComparerTests.Across_conditions_duplicate_metric_representatives_keep_policy_metrics_and_selected_scripts_unavailable() in C:\Users\rgone\MultiCliProfiles\codex\account-b\worktrees\8723\sqlharness\tests\SqlHarness.Tests\Dashboard\OptimizationComparerTests.cs:line 133
+   at System.Reflection.MethodBaseInvoker.InterpretedInvoke_Method(Object obj, IntPtr* args)
+   at System.Reflection.RuntimeMethodInfo.Invoke(Object obj, BindingFlags invokeAttr, Binder binder, Object[] parameters, CultureInfo culture)
+  Failed SqlHarness.Tests.Dashboard.OptimizationComparerTests.Active_pair_scan_summary_uses_its_exact_direct_operation_and_selected_case_aggregate [27 ms]
+  Error Message:
+   Assert.Equal() Failure: Values differ
+Expected: 24
+Actual:   null
+  Stack Trace:
+     at SqlHarness.Tests.Dashboard.OptimizationComparerTests.Active_pair_scan_summary_uses_its_exact_direct_operation_and_selected_case_aggregate() in C:\Users\rgone\MultiCliProfiles\codex\account-b\worktrees\8723\sqlharness\tests\SqlHarness.Tests\Dashboard\OptimizationComparerTests.cs:line 114
+   at System.Reflection.MethodBaseInvoker.InterpretedInvoke_Method(Object obj, IntPtr* args)
+   at System.Reflection.RuntimeMethodInfo.Invoke(Object obj, BindingFlags invokeAttr, Binder binder, Object[] parameters, CultureInfo culture)
+
+Failed!  - Failed:     6, Passed:     0, Skipped:     0, Total:     6, Duration: 315 ms - SqlHarness.Tests.dll (net10.0)

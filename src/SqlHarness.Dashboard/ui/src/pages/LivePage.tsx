@@ -52,7 +52,7 @@ export function LivePage() {
   })
 
   const error = operations.error ?? runningOperations.error ?? sessions.error
-  if (error) return <ErrorState error={error} />
+  if (error) return <ErrorState error={error} onRetry={() => { void operations.refetch(); void runningOperations.refetch(); void sessions.refetch() }} retrying={operations.isFetching || runningOperations.isFetching || sessions.isFetching} />
 
   const running = runningOnly(runningOperations.data ?? [])
   const visibleRunning = showInternal ? running : running.filter(operation => !isInternalOperation(operation))

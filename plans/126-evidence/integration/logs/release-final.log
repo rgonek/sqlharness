@@ -1,0 +1,12 @@
+  Determining projects to restore...
+  All projects are up-to-date for restore.
+  SqlHarness.Core -> D:\Dev\sqlharness\src\SqlHarness.Core\bin\Release\net10.0\SqlHarness.Core.dll
+  SqlHarness.Mcp -> D:\Dev\sqlharness\src\SqlHarness.Mcp\bin\Release\net10.0\SqlHarness.Mcp.dll
+  SqlHarness.Dashboard -> D:\Dev\sqlharness\src\SqlHarness.Dashboard\bin\Release\net10.0\SqlHarness.Dashboard.dll
+  SqlHarness.Cli -> D:\Dev\sqlharness\src\SqlHarness.Cli\bin\Release\net10.0\sqlharness.dll
+
+Build succeeded.
+    0 Warning(s)
+    0 Error(s)
+
+Time Elapsed 00:00:12.84

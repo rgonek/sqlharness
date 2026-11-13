@@ -11,6 +11,7 @@ import { Skeleton } from "@/components/ui/skeleton"
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { agentTabs } from "@/lib/agents"
 import { useNow } from "@/lib/useNow"
+import { isViewBoolean, isViewString, useViewPreference } from "@/lib/viewPreferences"
 
 function useDebounced<T>(value: T, ms: number): T {
   const [debounced, setDebounced] = useState(value)
@@ -23,10 +24,10 @@ function useDebounced<T>(value: T, ms: number): T {
 
 export function SessionsPage() {
   const optimizationFilterId = useId()
-  const [agent, setAgent] = useState("all")
-  const [view, setView] = useState<"active" | "archived">("active")
-  const [search, setSearch] = useState("")
-  const [hasOptimization, setHasOptimization] = useState(false)
+  const [agent, setAgent] = useViewPreference("sessions.agent", "all", isViewString)
+  const [view, setView] = useViewPreference<"active" | "archived">("sessions.view", "active", (value): value is "active" | "archived" => value === "active" || value === "archived")
+  const [search, setSearch] = useViewPreference("sessions.search", "", isViewString)
+  const [hasOptimization, setHasOptimization] = useViewPreference("sessions.optimization", false, isViewBoolean)
   const q = useDebounced(search.trim(), 300)
   const now = useNow(30_000)
   const agentKinds = useAgentKinds()
@@ -57,7 +58,7 @@ export function SessionsPage() {
     <div className="space-y-4">
       <h1>Sessions</h1>
       <div className="flex flex-wrap items-center gap-2">
-        <Input type="search" aria-label="Search sessions" placeholder="Search title, note, directory, key"
+        <Input type="search" maxLength={512} aria-label="Search sessions" placeholder="Search title, note, directory, key"
           value={search} onChange={e => setSearch(e.target.value)} className="max-w-sm" />
         <div className="flex items-center gap-2 text-sm">
           <Checkbox id={optimizationFilterId} checked={hasOptimization} onCheckedChange={setHasOptimization} />

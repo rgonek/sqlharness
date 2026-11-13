@@ -97,14 +97,14 @@ test("compare operation returns to the unassigned group without inventing subjec
 })
 
 test("compare opens on the Optimization panel and carries selected case and aggregate in its URL", async () => {
-  const comparison = { ...defaultOptimization, b: "v3", selectedCase: "0" }
+  const comparison = { ...defaultOptimization, b: "v3", selectedCase: "0", cases: [...defaultOptimization.cases, { id: "1", label: "@tenant = N'other'", outcome: "same" }] }
   const calls = stubOperationFetch({
     "/api/operations/10": operationDetail({ operation: operation({ id: 10, sessionId: 7, operation: "compare", database: "shop" }), session: session({ id: 7, title: "Tuning orders" }), compareSubject: "orders", compareScope: "whole", baselineVersion: "v0", candidateVersion: "v3", vars: { tenant: "acme" }, phases: [{ phase: "execute", count: 1, totalMs: 12, maxMs: 12 }], variants: [
       variant({ ordinal: 0, variant: "baseline", caseId: "0", matrixCell: 0 }), variant({ ordinal: 1, variant: "candidate", caseId: "0", matrixCell: 0 }),
       variant({ ordinal: 2, variant: "baseline", caseId: "1", caseLabel: "@tenant = N'other'", matrixCell: 1 }), variant({ ordinal: 3, variant: "candidate", caseId: "1", caseLabel: "@tenant = N'other'", matrixCell: 1 }),
     ], compareCases: [{ index: 0 }, { index: 1 }] }),
-    "/api/operations/10/optimization?case=0&aggregate=sum": comparison,
-    "/api/operations/10/optimization?case=1&aggregate=sum": { ...comparison, selectedCase: "1" },
+    "/api/operations/10/optimization?case=0&aggregate=sum&view=changed": comparison,
+    "/api/operations/10/optimization?case=1&aggregate=sum&view=changed": { ...comparison, selectedCase: "1" },
   })
   const { router, container } = renderApp("/operations/10?returnSession=7&returnSubject=orders&returnDb=shop&returnGroup=fp&returnScope=whole&returnA=v0&returnB=v3&returnCase=0&returnAgg=sum&case=0&agg=sum")
   expect(router.state.location.search).toMatchObject({ case: "0", agg: "sum" })
@@ -415,7 +415,7 @@ test("measure operation shows recorded setup SQL before the measured query", asy
   const section = await screen.findByRole("region", { name: "Setup SQL" })
   expect(within(section).getByTestId("sql-code").textContent).toBe(setup)
   expect(within(section).getByRole("button", { name: "Show formatted" })).toBeInTheDocument()
-  expect(within(section).getByRole("button", { name: "Copy" })).toBeInTheDocument()
+  expect(within(section).getByRole("button", { name: "Copy SQL" })).toBeInTheDocument()
   expect(within(section).getByText(/same database session/)).toBeInTheDocument()
   expect(screen.getAllByTestId("sql-code")).toHaveLength(2)
 })
@@ -542,4 +542,16 @@ test("query retains its recorded row count without a columns placeholder", async
   await userEvent.click(screen.getByRole("button", { name: "Details" }))
   expect(screen.getAllByText("Rows")).toHaveLength(2)
   expect(screen.getAllByText("Rows").every(label => label.parentElement?.textContent?.includes("42"))).toBe(true)
+})
+
+
+test.each([
+  { errorKind: "cancelled", cancelReason: "client", message: "Cancelled by the client." },
+  { errorKind: "cancelled", cancelReason: "deadline", message: "Cancelled when the call time budget ran out." },
+  { errorKind: null, cancelReason: null, message: "The operation failed." },
+])("failure reason is visible without opening status details: $message", async ({ errorKind, cancelReason, message }) => {
+  stubOperationFetch({ "/api/operations/10": operationDetail({ operation: operation({ id: 10, status: "failed", errorKind, cancelReason, errorMessage: "<script>recorded SQL error</script>" }) }) })
+  renderApp("/operations/10")
+  expect(await screen.findByRole("alert")).toHaveTextContent(message)
+  expect(screen.getByRole("alert")).toHaveTextContent("<script>recorded SQL error</script>")
 })

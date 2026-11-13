@@ -570,8 +570,13 @@ public sealed class DashboardServerTests
         using var home = new TempHome();
         var seed = new JournalSeed(home.DatabasePath);
         var session = JournalSeed.Session("cli:compare-page");
-        seed.Compare(session, "orders", "whole", "base", "v1");
-        seed.Compare(session, "orders", "whole", "v1", "v2");
+        foreach (var (baseline, candidate) in new[] { ("base", "v1"), ("v1", "v2") })
+        {
+            var measured = seed.Compare(session, "orders", "whole", baseline, candidate);
+            seed.CompareEvidence(measured, JournalSeed.ReproConditions(),
+                """{"kind":"compare","comparison":"Ordered","resultsEquivalent":true,"cases":[{"caseId":"0","equivalence":{"equivalent":true}}]}""",
+                OptimizationMetrics(100, 80));
+        }
         var id = Assert.Single(new JournalReader(home.DatabasePath, new FakeProcesses())
             .Sessions(new SessionQuery()).Items).Id;
         await using var dashboard = await StartAuthenticated(home);

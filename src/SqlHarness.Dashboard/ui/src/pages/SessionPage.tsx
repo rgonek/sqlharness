@@ -46,7 +46,7 @@ function SessionView({ id }: { id: number }) {
   const detail = useSession(id)
   const operationPages = useSessionOperations(id)
 
-  if (detail.error) return <ErrorState error={detail.error} />
+  if (detail.error) return <ErrorState error={detail.error} onRetry={() => void detail.refetch()} retrying={detail.isFetching} />
   if (detail.isPending) return <Skeleton className="h-64 w-full" />
 
   const { session, note = null, conversations = [] } = detail.data

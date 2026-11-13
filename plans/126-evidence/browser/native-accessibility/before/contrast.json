@@ -1,0 +1,1678 @@
+{
+  "startedAt": "2026-11-11T08:09:35.289Z",
+  "mode": "contrast",
+  "origin": "http://127.0.0.1:<isolated>",
+  "revision": "c8d0bb70af170184ea389bf81e103c05a827ab63",
+  "workingDiffSha256": "e10516d899a0ab97e5d7e1ac64b265b8be2947e352158abb1b43ff4d9a1069e0",
+  "checks": [
+    {
+      "label": "settings",
+      "theme": "",
+      "rows": [
+        {
+          "selector": "[data-slot=\"radio-group-item\"]",
+          "tag": "SPAN",
+          "name": "",
+          "checked": "true",
+          "border": "oklch(0.21 0.006 285.885)",
+          "background": "oklch(0.21 0.006 285.885)",
+          "fill": "rgb(0, 0, 0)",
+          "stroke": "none",
+          "surround": [
+            244,
+            244,
+            245
+          ],
+          "borderRatio": 16.118381484528566,
+          "fillRatio": 19.105407205191867,
+          "strokeRatio": 1.0530771131388545,
+          "boxShadow": "none",
+          "outline": "oklab(0.705 0.00415141 -0.0144141 / 0.5) none 3px"
+        },
+        {
+          "selector": "[data-slot=\"radio-group-item\"]",
+          "tag": "SPAN",
+          "name": "",
+          "checked": "false",
+          "border": "oklch(0.92 0.004 286.32)",
+          "background": "rgba(0, 0, 0, 0)",
+          "fill": "rgb(0, 0, 0)",
+          "stroke": "none",
+          "surround": [
+            255,
+            255,
+            255
+          ],
+          "borderRatio": 1.2688774649087908,
+          "fillRatio": 21,
+          "strokeRatio": 19.895357656776593,
+          "boxShadow": "none",
+          "outline": "oklab(0.705 0.00415141 -0.0144141 / 0.5) none 3px"
+        },
+        {
+          "selector": "[data-slot=\"radio-group-item\"]",
+          "tag": "SPAN",
+          "name": "",
+          "checked": "false",
+          "border": "oklch(0.92 0.004 286.32)",
+          "background": "rgba(0, 0, 0, 0)",
+          "fill": "rgb(0, 0, 0)",
+          "stroke": "none",
+          "surround": [
+            255,
+            255,
+            255
+          ],
+          "borderRatio": 1.2688774649087908,
+          "fillRatio": 21,
+          "strokeRatio": 19.895357656776593,
+          "boxShadow": "none",
+          "outline": "oklab(0.705 0.00415141 -0.0144141 / 0.5) none 3px"
+        },
+        {
+          "selector": "input[data-slot=\"input\"]",
+          "tag": "INPUT",
+          "name": "Connection timeout (seconds)",
+          "checked": null,
+          "border": "oklch(0.92 0.004 286.32)",
+          "background": "oklab(0.92 0.00112401 -0.00383883 / 0.2)",
+          "fill": "rgb(0, 0, 0)",
+          "stroke": "none",
+          "surround": [
+            255,
+            255,
+            255
+          ],
+          "borderRatio": 1.2688774649087908,
+          "fillRatio": 21,
+          "strokeRatio": 19.895357656776593,
+          "boxShadow": "none",
+          "outline": "oklab(0.705 0.00415141 -0.0144141 / 0.5) none 3px"
+        },
+        {
+          "selector": "input[data-slot=\"input\"]",
+          "tag": "INPUT",
+          "name": "Default execution timeout (seconds)",
+          "checked": null,
+          "border": "oklch(0.92 0.004 286.32)",
+          "background": "oklab(0.92 0.00112401 -0.00383883 / 0.2)",
+          "fill": "rgb(0, 0, 0)",
+          "stroke": "none",
+          "surround": [
+            255,
+            255,
+            255
+          ],
+          "borderRatio": 1.2688774649087908,
+          "fillRatio": 21,
+          "strokeRatio": 19.895357656776593,
+          "boxShadow": "none",
+          "outline": "oklab(0.705 0.00415141 -0.0144141 / 0.5) none 3px"
+        },
+        {
+          "selector": "input[data-slot=\"input\"]",
+          "tag": "INPUT",
+          "name": "Approval timeout (seconds)",
+          "checked": null,
+          "border": "oklch(0.92 0.004 286.32)",
+          "background": "oklab(0.92 0.00112401 -0.00383883 / 0.2)",
+          "fill": "rgb(0, 0, 0)",
+          "stroke": "none",
+          "surround": [
+            255,
+            255,
+            255
+          ],
+          "borderRatio": 1.2688774649087908,
+          "fillRatio": 21,
+          "strokeRatio": 19.895357656776593,
+          "boxShadow": "none",
+          "outline": "oklab(0.705 0.00415141 -0.0144141 / 0.5) none 3px"
+        },
+        {
+          "selector": "input[data-slot=\"input\"]",
+          "tag": "INPUT",
+          "name": "",
+          "checked": null,
+          "border": "oklch(0.92 0.004 286.32)",
+          "background": "oklab(0.92 0.00112401 -0.00383883 / 0.2)",
+          "fill": "rgb(0, 0, 0)",
+          "stroke": "none",
+          "surround": [
+            255,
+            255,
+            255
+          ],
+          "borderRatio": 1.2688774649087908,
+          "fillRatio": 21,
+          "strokeRatio": 19.895357656776593,
+          "boxShadow": "none",
+          "outline": "oklab(0.705 0.00415141 -0.0144141 / 0.5) none 3px"
+        },
+        {
+          "selector": "input[data-slot=\"input\"]",
+          "tag": "INPUT",
+          "name": "Maximum age (days)",
+          "checked": null,
+          "border": "oklch(0.92 0.004 286.32)",
+          "background": "oklab(0.92 0.00112401 -0.00383883 / 0.2)",
+          "fill": "rgb(0, 0, 0)",
+          "stroke": "none",
+          "surround": [
+            255,
+            255,
+            255
+          ],
+          "borderRatio": 1.2688774649087908,
+          "fillRatio": 21,
+          "strokeRatio": 19.895357656776593,
+          "boxShadow": "none",
+          "outline": "oklab(0.705 0.00415141 -0.0144141 / 0.5) none 3px"
+        },
+        {
+          "selector": "input[data-slot=\"input\"]",
+          "tag": "INPUT",
+          "name": "Maximum size (MB)",
+          "checked": null,
+          "border": "oklch(0.92 0.004 286.32)",
+          "background": "oklab(0.92 0.00112401 -0.00383883 / 0.2)",
+          "fill": "rgb(0, 0, 0)",
+          "stroke": "none",
+          "surround": [
+            255,
+            255,
+            255
+          ],
+          "borderRatio": 1.2688774649087908,
+          "fillRatio": 21,
+          "strokeRatio": 19.895357656776593,
+          "boxShadow": "none",
+          "outline": "oklab(0.705 0.00415141 -0.0144141 / 0.5) none 3px"
+        },
+        {
+          "selector": "[data-slot=\"switch\"]",
+          "tag": "SPAN",
+          "name": "Connection diagnostics",
+          "checked": "false",
+          "border": "rgba(0, 0, 0, 0)",
+          "background": "oklch(0.92 0.004 286.32)",
+          "fill": "rgb(0, 0, 0)",
+          "stroke": "none",
+          "surround": [
+            255,
+            255,
+            255
+          ],
+          "borderRatio": 1,
+          "fillRatio": 21,
+          "strokeRatio": 19.895357656776593,
+          "boxShadow": "none",
+          "outline": "oklab(0.705 0.00415141 -0.0144141 / 0.5) none 3px"
+        },
+        {
+          "selector": "[data-slot=\"switch\"]",
+          "tag": "SPAN",
+          "name": "Mute approval sound",
+          "checked": "false",
+          "border": "rgba(0, 0, 0, 0)",
+          "background": "oklch(0.92 0.004 286.32)",
+          "fill": "rgb(0, 0, 0)",
+          "stroke": "none",
+          "surround": [
+            255,
+            255,
+            255
+          ],
+          "borderRatio": 1,
+          "fillRatio": 21,
+          "strokeRatio": 19.895357656776593,
+          "boxShadow": "none",
+          "outline": "oklab(0.705 0.00415141 -0.0144141 / 0.5) none 3px"
+        },
+        {
+          "selector": "[data-slot=\"switch\"]",
+          "tag": "SPAN",
+          "name": "Journal enabled",
+          "checked": "true",
+          "border": "rgba(0, 0, 0, 0)",
+          "background": "oklch(0.21 0.006 285.885)",
+          "fill": "rgb(0, 0, 0)",
+          "stroke": "none",
+          "surround": [
+            255,
+            255,
+            255
+          ],
+          "borderRatio": 1,
+          "fillRatio": 21,
+          "strokeRatio": 19.895357656776593,
+          "boxShadow": "none",
+          "outline": "oklab(0.705 0.00415141 -0.0144141 / 0.5) none 3px"
+        },
+        {
+          "selector": "[data-slot=\"switch\"]",
+          "tag": "SPAN",
+          "name": "Store sensitive data",
+          "checked": "true",
+          "border": "rgba(0, 0, 0, 0)",
+          "background": "oklch(0.21 0.006 285.885)",
+          "fill": "rgb(0, 0, 0)",
+          "stroke": "none",
+          "surround": [
+            255,
+            255,
+            255
+          ],
+          "borderRatio": 1,
+          "fillRatio": 21,
+          "strokeRatio": 19.895357656776593,
+          "boxShadow": "none",
+          "outline": "oklab(0.705 0.00415141 -0.0144141 / 0.5) none 3px"
+        },
+        {
+          "selector": "[data-slot=\"switch\"]",
+          "tag": "SPAN",
+          "name": "Agent operation annotations",
+          "checked": "true",
+          "border": "rgba(0, 0, 0, 0)",
+          "background": "oklch(0.21 0.006 285.885)",
+          "fill": "rgb(0, 0, 0)",
+          "stroke": "none",
+          "surround": [
+            255,
+            255,
+            255
+          ],
+          "borderRatio": 1,
+          "fillRatio": 21,
+          "strokeRatio": 19.895357656776593,
+          "boxShadow": "none",
+          "outline": "oklab(0.705 0.00415141 -0.0144141 / 0.5) none 3px"
+        },
+        {
+          "selector": "[data-slot=\"switch\"]",
+          "tag": "SPAN",
+          "name": "Retention enabled",
+          "checked": "false",
+          "border": "rgba(0, 0, 0, 0)",
+          "background": "oklch(0.92 0.004 286.32)",
+          "fill": "rgb(0, 0, 0)",
+          "stroke": "none",
+          "surround": [
+            255,
+            255,
+            255
+          ],
+          "borderRatio": 1,
+          "fillRatio": 21,
+          "strokeRatio": 19.895357656776593,
+          "boxShadow": "none",
+          "outline": "oklab(0.705 0.00415141 -0.0144141 / 0.5) none 3px"
+        }
+      ],
+      "tokens": {
+        "--input": {
+          "color": "oklch(92% .004 286.32)",
+          "ratio": 1.2688774649087908,
+          "against": [
+            255,
+            255,
+            255
+          ]
+        },
+        "--ring": {
+          "color": "oklch(70.5% .015 286.067)",
+          "ratio": 2.622916413268822,
+          "against": [
+            255,
+            255,
+            255
+          ]
+        },
+        "--chart-1": {
+          "color": "oklch(87.1% .006 286.286)",
+          "ratio": 1.4780013538859798,
+          "against": [
+            255,
+            255,
+            255
+          ]
+        },
+        "--chart-2": {
+          "color": "oklch(55.2% .016 285.938)",
+          "ratio": 4.827358601247048,
+          "against": [
+            255,
+            255,
+            255
+          ]
+        },
+        "--chart-3": {
+          "color": "oklch(44.2% .017 285.786)",
+          "ratio": 7.719945827625962,
+          "against": [
+            255,
+            255,
+            255
+          ]
+        },
+        "--chart-4": {
+          "color": "oklch(37% .013 285.805)",
+          "ratio": 10.430421247164546,
+          "against": [
+            255,
+            255,
+            255
+          ]
+        },
+        "--chart-5": {
+          "color": "oklch(27.4% .006 286.033)",
+          "ratio": 14.894588477600598,
+          "against": [
+            255,
+            255,
+            255
+          ]
+        }
+      }
+    },
+    {
+      "label": "settings keyboard focus",
+      "theme": "",
+      "rows": [
+        {
+          "selector": "[data-slot=\"radio-group-item\"]",
+          "tag": "SPAN",
+          "name": "",
+          "checked": "true",
+          "border": "oklch(0.21 0.006 285.885)",
+          "background": "oklch(0.21 0.006 285.885)",
+          "fill": "rgb(0, 0, 0)",
+          "stroke": "none",
+          "surround": [
+            244,
+            244,
+            245
+          ],
+          "borderRatio": 16.118381484528566,
+          "fillRatio": 19.105407205191867,
+          "strokeRatio": 1.0530771131388545,
+          "boxShadow": "none",
+          "outline": "oklab(0.705 0.00415141 -0.0144141 / 0.5) none 3px"
+        },
+        {
+          "selector": "[data-slot=\"radio-group-item\"]",
+          "tag": "SPAN",
+          "name": "",
+          "checked": "false",
+          "border": "oklch(0.92 0.004 286.32)",
+          "background": "rgba(0, 0, 0, 0)",
+          "fill": "rgb(0, 0, 0)",
+          "stroke": "none",
+          "surround": [
+            255,
+            255,
+            255
+          ],
+          "borderRatio": 1.2688774649087908,
+          "fillRatio": 21,
+          "strokeRatio": 19.895357656776593,
+          "boxShadow": "none",
+          "outline": "oklab(0.705 0.00415141 -0.0144141 / 0.5) none 3px"
+        },
+        {
+          "selector": "[data-slot=\"radio-group-item\"]",
+          "tag": "SPAN",
+          "name": "",
+          "checked": "false",
+          "border": "oklch(0.92 0.004 286.32)",
+          "background": "rgba(0, 0, 0, 0)",
+          "fill": "rgb(0, 0, 0)",
+          "stroke": "none",
+          "surround": [
+            255,
+            255,
+            255
+          ],
+          "borderRatio": 1.2688774649087908,
+          "fillRatio": 21,
+          "strokeRatio": 19.895357656776593,
+          "boxShadow": "none",
+          "outline": "oklab(0.705 0.00415141 -0.0144141 / 0.5) none 3px"
+        },
+        {
+          "selector": "input[data-slot=\"input\"]",
+          "tag": "INPUT",
+          "name": "Connection timeout (seconds)",
+          "checked": null,
+          "border": "oklch(0.705 0.015 286.067)",
+          "background": "oklab(0.92 0.00112401 -0.00383883 / 0.2)",
+          "fill": "rgb(0, 0, 0)",
+          "stroke": "none",
+          "surround": [
+            255,
+            255,
+            255
+          ],
+          "borderRatio": 2.622916413268822,
+          "fillRatio": 21,
+          "strokeRatio": 19.895357656776593,
+          "boxShadow": "rgba(0, 0, 0, 0) 0px 0px 0px 0px, rgba(0, 0, 0, 0) 0px 0px 0px 0px, rgba(0, 0, 0, 0) 0px 0px 0px 0px, oklab(0.705 0.00415141 -0.0144141 / 0.3) 0px 0px 0px 2px, rgba(0, 0, 0, 0) 0px 0px 0px 0px",
+          "outline": "oklch(0.141 0.005 285.823) solid 2px"
+        },
+        {
+          "selector": "input[data-slot=\"input\"]",
+          "tag": "INPUT",
+          "name": "Default execution timeout (seconds)",
+          "checked": null,
+          "border": "oklch(0.92 0.004 286.32)",
+          "background": "oklab(0.92 0.00112401 -0.00383883 / 0.2)",
+          "fill": "rgb(0, 0, 0)",
+          "stroke": "none",
+          "surround": [
+            255,
+            255,
+            255
+          ],
+          "borderRatio": 1.2688774649087908,
+          "fillRatio": 21,
+          "strokeRatio": 19.895357656776593,
+          "boxShadow": "none",
+          "outline": "oklab(0.705 0.00415141 -0.0144141 / 0.5) none 3px"
+        },
+        {
+          "selector": "input[data-slot=\"input\"]",
+          "tag": "INPUT",
+          "name": "Approval timeout (seconds)",
+          "checked": null,
+          "border": "oklch(0.92 0.004 286.32)",
+          "background": "oklab(0.92 0.00112401 -0.00383883 / 0.2)",
+          "fill": "rgb(0, 0, 0)",
+          "stroke": "none",
+          "surround": [
+            255,
+            255,
+            255
+          ],
+          "borderRatio": 1.2688774649087908,
+          "fillRatio": 21,
+          "strokeRatio": 19.895357656776593,
+          "boxShadow": "none",
+          "outline": "oklab(0.705 0.00415141 -0.0144141 / 0.5) none 3px"
+        },
+        {
+          "selector": "input[data-slot=\"input\"]",
+          "tag": "INPUT",
+          "name": "",
+          "checked": null,
+          "border": "oklch(0.92 0.004 286.32)",
+          "background": "oklab(0.92 0.00112401 -0.00383883 / 0.2)",
+          "fill": "rgb(0, 0, 0)",
+          "stroke": "none",
+          "surround": [
+            255,
+            255,
+            255
+          ],
+          "borderRatio": 1.2688774649087908,
+          "fillRatio": 21,
+          "strokeRatio": 19.895357656776593,
+          "boxShadow": "none",
+          "outline": "oklab(0.705 0.00415141 -0.0144141 / 0.5) none 3px"
+        },
+        {
+          "selector": "input[data-slot=\"input\"]",
+          "tag": "INPUT",
+          "name": "Maximum age (days)",
+          "checked": null,
+          "border": "oklch(0.92 0.004 286.32)",
+          "background": "oklab(0.92 0.00112401 -0.00383883 / 0.2)",
+          "fill": "rgb(0, 0, 0)",
+          "stroke": "none",
+          "surround": [
+            255,
+            255,
+            255
+          ],
+          "borderRatio": 1.2688774649087908,
+          "fillRatio": 21,
+          "strokeRatio": 19.895357656776593,
+          "boxShadow": "none",
+          "outline": "oklab(0.705 0.00415141 -0.0144141 / 0.5) none 3px"
+        },
+        {
+          "selector": "input[data-slot=\"input\"]",
+          "tag": "INPUT",
+          "name": "Maximum size (MB)",
+          "checked": null,
+          "border": "oklch(0.92 0.004 286.32)",
+          "background": "oklab(0.92 0.00112401 -0.00383883 / 0.2)",
+          "fill": "rgb(0, 0, 0)",
+          "stroke": "none",
+          "surround": [
+            255,
+            255,
+            255
+          ],
+          "borderRatio": 1.2688774649087908,
+          "fillRatio": 21,
+          "strokeRatio": 19.895357656776593,
+          "boxShadow": "none",
+          "outline": "oklab(0.705 0.00415141 -0.0144141 / 0.5) none 3px"
+        },
+        {
+          "selector": "[data-slot=\"switch\"]",
+          "tag": "SPAN",
+          "name": "Connection diagnostics",
+          "checked": "false",
+          "border": "rgba(0, 0, 0, 0)",
+          "background": "oklch(0.92 0.004 286.32)",
+          "fill": "rgb(0, 0, 0)",
+          "stroke": "none",
+          "surround": [
+            255,
+            255,
+            255
+          ],
+          "borderRatio": 1,
+          "fillRatio": 21,
+          "strokeRatio": 19.895357656776593,
+          "boxShadow": "none",
+          "outline": "oklab(0.705 0.00415141 -0.0144141 / 0.5) none 3px"
+        },
+        {
+          "selector": "[data-slot=\"switch\"]",
+          "tag": "SPAN",
+          "name": "Mute approval sound",
+          "checked": "false",
+          "border": "rgba(0, 0, 0, 0)",
+          "background": "oklch(0.92 0.004 286.32)",
+          "fill": "rgb(0, 0, 0)",
+          "stroke": "none",
+          "surround": [
+            255,
+            255,
+            255
+          ],
+          "borderRatio": 1,
+          "fillRatio": 21,
+          "strokeRatio": 19.895357656776593,
+          "boxShadow": "none",
+          "outline": "oklab(0.705 0.00415141 -0.0144141 / 0.5) none 3px"
+        },
+        {
+          "selector": "[data-slot=\"switch\"]",
+          "tag": "SPAN",
+          "name": "Journal enabled",
+          "checked": "true",
+          "border": "rgba(0, 0, 0, 0)",
+          "background": "oklch(0.21 0.006 285.885)",
+          "fill": "rgb(0, 0, 0)",
+          "stroke": "none",
+          "surround": [
+            255,
+            255,
+            255
+          ],
+          "borderRatio": 1,
+          "fillRatio": 21,
+          "strokeRatio": 19.895357656776593,
+          "boxShadow": "none",
+          "outline": "oklab(0.705 0.00415141 -0.0144141 / 0.5) none 3px"
+        },
+        {
+          "selector": "[data-slot=\"switch\"]",
+          "tag": "SPAN",
+          "name": "Store sensitive data",
+          "checked": "true",
+          "border": "rgba(0, 0, 0, 0)",
+          "background": "oklch(0.21 0.006 285.885)",
+          "fill": "rgb(0, 0, 0)",
+          "stroke": "none",
+          "surround": [
+            255,
+            255,
+            255
+          ],
+          "borderRatio": 1,
+          "fillRatio": 21,
+          "strokeRatio": 19.895357656776593,
+          "boxShadow": "none",
+          "outline": "oklab(0.705 0.00415141 -0.0144141 / 0.5) none 3px"
+        },
+        {
+          "selector": "[data-slot=\"switch\"]",
+          "tag": "SPAN",
+          "name": "Agent operation annotations",
+          "checked": "true",
+          "border": "rgba(0, 0, 0, 0)",
+          "background": "oklch(0.21 0.006 285.885)",
+          "fill": "rgb(0, 0, 0)",
+          "stroke": "none",
+          "surround": [
+            255,
+            255,
+            255
+          ],
+          "borderRatio": 1,
+          "fillRatio": 21,
+          "strokeRatio": 19.895357656776593,
+          "boxShadow": "none",
+          "outline": "oklab(0.705 0.00415141 -0.0144141 / 0.5) none 3px"
+        },
+        {
+          "selector": "[data-slot=\"switch\"]",
+          "tag": "SPAN",
+          "name": "Retention enabled",
+          "checked": "false",
+          "border": "rgba(0, 0, 0, 0)",
+          "background": "oklch(0.92 0.004 286.32)",
+          "fill": "rgb(0, 0, 0)",
+          "stroke": "none",
+          "surround": [
+            255,
+            255,
+            255
+          ],
+          "borderRatio": 1,
+          "fillRatio": 21,
+          "strokeRatio": 19.895357656776593,
+          "boxShadow": "none",
+          "outline": "oklab(0.705 0.00415141 -0.0144141 / 0.5) none 3px"
+        }
+      ],
+      "tokens": {
+        "--input": {
+          "color": "oklch(92% .004 286.32)",
+          "ratio": 1.2688774649087908,
+          "against": [
+            255,
+            255,
+            255
+          ]
+        },
+        "--ring": {
+          "color": "oklch(70.5% .015 286.067)",
+          "ratio": 2.622916413268822,
+          "against": [
+            255,
+            255,
+            255
+          ]
+        },
+        "--chart-1": {
+          "color": "oklch(87.1% .006 286.286)",
+          "ratio": 1.4780013538859798,
+          "against": [
+            255,
+            255,
+            255
+          ]
+        },
+        "--chart-2": {
+          "color": "oklch(55.2% .016 285.938)",
+          "ratio": 4.827358601247048,
+          "against": [
+            255,
+            255,
+            255
+          ]
+        },
+        "--chart-3": {
+          "color": "oklch(44.2% .017 285.786)",
+          "ratio": 7.719945827625962,
+          "against": [
+            255,
+            255,
+            255
+          ]
+        },
+        "--chart-4": {
+          "color": "oklch(37% .013 285.805)",
+          "ratio": 10.430421247164546,
+          "against": [
+            255,
+            255,
+            255
+          ]
+        },
+        "--chart-5": {
+          "color": "oklch(27.4% .006 286.033)",
+          "ratio": 14.894588477600598,
+          "against": [
+            255,
+            255,
+            255
+          ]
+        }
+      }
+    },
+    {
+      "label": "session A/B",
+      "theme": "",
+      "rows": [
+        {
+          "selector": "[data-slot=\"checkbox\"]",
+          "tag": "SPAN",
+          "name": "",
+          "checked": "false",
+          "border": "oklch(0.92 0.004 286.32)",
+          "background": "rgba(0, 0, 0, 0)",
+          "fill": "rgb(0, 0, 0)",
+          "stroke": "none",
+          "surround": [
+            255,
+            255,
+            255
+          ],
+          "borderRatio": 1.2688774649087908,
+          "fillRatio": 21,
+          "strokeRatio": 19.895357656776593,
+          "boxShadow": "none",
+          "outline": "oklab(0.705 0.00415141 -0.0144141 / 0.5) none 3px"
+        }
+      ],
+      "tokens": {
+        "--input": {
+          "color": "oklch(92% .004 286.32)",
+          "ratio": 1.2688774649087908,
+          "against": [
+            255,
+            255,
+            255
+          ]
+        },
+        "--ring": {
+          "color": "oklch(70.5% .015 286.067)",
+          "ratio": 2.622916413268822,
+          "against": [
+            255,
+            255,
+            255
+          ]
+        },
+        "--chart-1": {
+          "color": "oklch(87.1% .006 286.286)",
+          "ratio": 1.4780013538859798,
+          "against": [
+            255,
+            255,
+            255
+          ]
+        },
+        "--chart-2": {
+          "color": "oklch(55.2% .016 285.938)",
+          "ratio": 4.827358601247048,
+          "against": [
+            255,
+            255,
+            255
+          ]
+        },
+        "--chart-3": {
+          "color": "oklch(44.2% .017 285.786)",
+          "ratio": 7.719945827625962,
+          "against": [
+            255,
+            255,
+            255
+          ]
+        },
+        "--chart-4": {
+          "color": "oklch(37% .013 285.805)",
+          "ratio": 10.430421247164546,
+          "against": [
+            255,
+            255,
+            255
+          ]
+        },
+        "--chart-5": {
+          "color": "oklch(27.4% .006 286.033)",
+          "ratio": 14.894588477600598,
+          "against": [
+            255,
+            255,
+            255
+          ]
+        }
+      }
+    },
+    {
+      "label": "settings",
+      "theme": "dark",
+      "rows": [
+        {
+          "selector": "[data-slot=\"radio-group-item\"]",
+          "tag": "SPAN",
+          "name": "",
+          "checked": "true",
+          "border": "oklab(0.21 0.00164224 -0.00577088)",
+          "background": "oklab(0.21 0.00164224 -0.00577088)",
+          "fill": "rgb(0, 0, 0)",
+          "stroke": "none",
+          "surround": [
+            244,
+            244,
+            245
+          ],
+          "borderRatio": 16.118381484528566,
+          "fillRatio": 19.105407205191867,
+          "strokeRatio": 1.0530771131388545,
+          "boxShadow": "none",
+          "outline": "oklab(0.705 0.00415141 -0.0144141 / 0.5) none 3px"
+        },
+        {
+          "selector": "[data-slot=\"radio-group-item\"]",
+          "tag": "SPAN",
+          "name": "",
+          "checked": "false",
+          "border": "oklab(0.92 0.00112401 -0.00383883)",
+          "background": "oklab(0 0 0 / 0)",
+          "fill": "rgb(0, 0, 0)",
+          "stroke": "none",
+          "surround": [
+            255,
+            255,
+            255
+          ],
+          "borderRatio": 1.2688774649087908,
+          "fillRatio": 21,
+          "strokeRatio": 19.895357656776593,
+          "boxShadow": "none",
+          "outline": "oklab(0.705 0.00415141 -0.0144141 / 0.5) none 3px"
+        },
+        {
+          "selector": "[data-slot=\"radio-group-item\"]",
+          "tag": "SPAN",
+          "name": "",
+          "checked": "false",
+          "border": "oklab(0.92 0.00112401 -0.00383883)",
+          "background": "oklab(0 0 0 / 0)",
+          "fill": "rgb(0, 0, 0)",
+          "stroke": "none",
+          "surround": [
+            255,
+            255,
+            255
+          ],
+          "borderRatio": 1.2688774649087908,
+          "fillRatio": 21,
+          "strokeRatio": 19.895357656776593,
+          "boxShadow": "none",
+          "outline": "oklab(0.705 0.00415141 -0.0144141 / 0.5) none 3px"
+        },
+        {
+          "selector": "input[data-slot=\"input\"]",
+          "tag": "INPUT",
+          "name": "Connection timeout (seconds)",
+          "checked": null,
+          "border": "oklab(0.92 0.00112401 -0.00383883)",
+          "background": "oklab(0.92 0.00112401 -0.00383883 / 0.2)",
+          "fill": "rgb(0, 0, 0)",
+          "stroke": "none",
+          "surround": [
+            255,
+            255,
+            255
+          ],
+          "borderRatio": 1.2688774649087908,
+          "fillRatio": 21,
+          "strokeRatio": 19.895357656776593,
+          "boxShadow": "none",
+          "outline": "oklab(0.705 0.00415141 -0.0144141 / 0.5) none 3px"
+        },
+        {
+          "selector": "input[data-slot=\"input\"]",
+          "tag": "INPUT",
+          "name": "Default execution timeout (seconds)",
+          "checked": null,
+          "border": "oklab(0.92 0.00112401 -0.00383883)",
+          "background": "oklab(0.92 0.00112401 -0.00383883 / 0.2)",
+          "fill": "rgb(0, 0, 0)",
+          "stroke": "none",
+          "surround": [
+            255,
+            255,
+            255
+          ],
+          "borderRatio": 1.2688774649087908,
+          "fillRatio": 21,
+          "strokeRatio": 19.895357656776593,
+          "boxShadow": "none",
+          "outline": "oklab(0.705 0.00415141 -0.0144141 / 0.5) none 3px"
+        },
+        {
+          "selector": "input[data-slot=\"input\"]",
+          "tag": "INPUT",
+          "name": "Approval timeout (seconds)",
+          "checked": null,
+          "border": "oklab(0.92 0.00112401 -0.00383883)",
+          "background": "oklab(0.92 0.00112401 -0.00383883 / 0.2)",
+          "fill": "rgb(0, 0, 0)",
+          "stroke": "none",
+          "surround": [
+            255,
+            255,
+            255
+          ],
+          "borderRatio": 1.2688774649087908,
+          "fillRatio": 21,
+          "strokeRatio": 19.895357656776593,
+          "boxShadow": "none",
+          "outline": "oklab(0.705 0.00415141 -0.0144141 / 0.5) none 3px"
+        },
+        {
+          "selector": "input[data-slot=\"input\"]",
+          "tag": "INPUT",
+          "name": "",
+          "checked": null,
+          "border": "oklab(0.92 0.00112401 -0.00383883)",
+          "background": "oklab(0.92 0.00112401 -0.00383883 / 0.2)",
+          "fill": "rgb(0, 0, 0)",
+          "stroke": "none",
+          "surround": [
+            255,
+            255,
+            255
+          ],
+          "borderRatio": 1.2688774649087908,
+          "fillRatio": 21,
+          "strokeRatio": 19.895357656776593,
+          "boxShadow": "none",
+          "outline": "oklab(0.705 0.00415141 -0.0144141 / 0.5) none 3px"
+        },
+        {
+          "selector": "input[data-slot=\"input\"]",
+          "tag": "INPUT",
+          "name": "Maximum age (days)",
+          "checked": null,
+          "border": "oklab(0.92 0.00112401 -0.00383883)",
+          "background": "oklab(0.92 0.00112401 -0.00383883 / 0.2)",
+          "fill": "rgb(0, 0, 0)",
+          "stroke": "none",
+          "surround": [
+            255,
+            255,
+            255
+          ],
+          "borderRatio": 1.2688774649087908,
+          "fillRatio": 21,
+          "strokeRatio": 19.895357656776593,
+          "boxShadow": "none",
+          "outline": "oklab(0.705 0.00415141 -0.0144141 / 0.5) none 3px"
+        },
+        {
+          "selector": "input[data-slot=\"input\"]",
+          "tag": "INPUT",
+          "name": "Maximum size (MB)",
+          "checked": null,
+          "border": "oklab(0.92 0.00112401 -0.00383883)",
+          "background": "oklab(0.92 0.00112401 -0.00383883 / 0.2)",
+          "fill": "rgb(0, 0, 0)",
+          "stroke": "none",
+          "surround": [
+            255,
+            255,
+            255
+          ],
+          "borderRatio": 1.2688774649087908,
+          "fillRatio": 21,
+          "strokeRatio": 19.895357656776593,
+          "boxShadow": "none",
+          "outline": "oklab(0.705 0.00415141 -0.0144141 / 0.5) none 3px"
+        },
+        {
+          "selector": "[data-slot=\"switch\"]",
+          "tag": "SPAN",
+          "name": "Connection diagnostics",
+          "checked": "false",
+          "border": "rgba(0, 0, 0, 0)",
+          "background": "oklab(0.92 0.00112401 -0.00383883)",
+          "fill": "rgb(0, 0, 0)",
+          "stroke": "none",
+          "surround": [
+            255,
+            255,
+            255
+          ],
+          "borderRatio": 1,
+          "fillRatio": 21,
+          "strokeRatio": 19.895357656776593,
+          "boxShadow": "none",
+          "outline": "oklab(0.705 0.00415141 -0.0144141 / 0.5) none 3px"
+        },
+        {
+          "selector": "[data-slot=\"switch\"]",
+          "tag": "SPAN",
+          "name": "Mute approval sound",
+          "checked": "false",
+          "border": "rgba(0, 0, 0, 0)",
+          "background": "oklab(0.92 0.00112401 -0.00383883)",
+          "fill": "rgb(0, 0, 0)",
+          "stroke": "none",
+          "surround": [
+            255,
+            255,
+            255
+          ],
+          "borderRatio": 1,
+          "fillRatio": 21,
+          "strokeRatio": 19.895357656776593,
+          "boxShadow": "none",
+          "outline": "oklab(0.705 0.00415141 -0.0144141 / 0.5) none 3px"
+        },
+        {
+          "selector": "[data-slot=\"switch\"]",
+          "tag": "SPAN",
+          "name": "Journal enabled",
+          "checked": "true",
+          "border": "rgba(0, 0, 0, 0)",
+          "background": "oklab(0.21 0.00164224 -0.00577088)",
+          "fill": "rgb(0, 0, 0)",
+          "stroke": "none",
+          "surround": [
+            255,
+            255,
+            255
+          ],
+          "borderRatio": 1,
+          "fillRatio": 21,
+          "strokeRatio": 19.895357656776593,
+          "boxShadow": "none",
+          "outline": "oklab(0.705 0.00415141 -0.0144141 / 0.5) none 3px"
+        },
+        {
+          "selector": "[data-slot=\"switch\"]",
+          "tag": "SPAN",
+          "name": "Store sensitive data",
+          "checked": "true",
+          "border": "rgba(0, 0, 0, 0)",
+          "background": "oklab(0.21 0.00164224 -0.00577088)",
+          "fill": "rgb(0, 0, 0)",
+          "stroke": "none",
+          "surround": [
+            255,
+            255,
+            255
+          ],
+          "borderRatio": 1,
+          "fillRatio": 21,
+          "strokeRatio": 19.895357656776593,
+          "boxShadow": "none",
+          "outline": "oklab(0.705 0.00415141 -0.0144141 / 0.5) none 3px"
+        },
+        {
+          "selector": "[data-slot=\"switch\"]",
+          "tag": "SPAN",
+          "name": "Agent operation annotations",
+          "checked": "true",
+          "border": "rgba(0, 0, 0, 0)",
+          "background": "oklab(0.21 0.00164224 -0.00577088)",
+          "fill": "rgb(0, 0, 0)",
+          "stroke": "none",
+          "surround": [
+            255,
+            255,
+            255
+          ],
+          "borderRatio": 1,
+          "fillRatio": 21,
+          "strokeRatio": 19.895357656776593,
+          "boxShadow": "none",
+          "outline": "oklab(0.705 0.00415141 -0.0144141 / 0.5) none 3px"
+        },
+        {
+          "selector": "[data-slot=\"switch\"]",
+          "tag": "SPAN",
+          "name": "Retention enabled",
+          "checked": "false",
+          "border": "rgba(0, 0, 0, 0)",
+          "background": "oklab(0.92 0.00112401 -0.00383883)",
+          "fill": "rgb(0, 0, 0)",
+          "stroke": "none",
+          "surround": [
+            255,
+            255,
+            255
+          ],
+          "borderRatio": 1,
+          "fillRatio": 21,
+          "strokeRatio": 19.895357656776593,
+          "boxShadow": "none",
+          "outline": "oklab(0.705 0.00415141 -0.0144141 / 0.5) none 3px"
+        }
+      ],
+      "tokens": {
+        "--input": {
+          "color": "oklch(100% 0 0/.15)",
+          "ratio": 1,
+          "against": [
+            255,
+            255,
+            255
+          ]
+        },
+        "--ring": {
+          "color": "oklch(55.2% .016 285.938)",
+          "ratio": 4.827358601247048,
+          "against": [
+            255,
+            255,
+            255
+          ]
+        },
+        "--chart-1": {
+          "color": "oklch(87.1% .006 286.286)",
+          "ratio": 1.4780013538859798,
+          "against": [
+            255,
+            255,
+            255
+          ]
+        },
+        "--chart-2": {
+          "color": "oklch(55.2% .016 285.938)",
+          "ratio": 4.827358601247048,
+          "against": [
+            255,
+            255,
+            255
+          ]
+        },
+        "--chart-3": {
+          "color": "oklch(44.2% .017 285.786)",
+          "ratio": 7.719945827625962,
+          "against": [
+            255,
+            255,
+            255
+          ]
+        },
+        "--chart-4": {
+          "color": "oklch(37% .013 285.805)",
+          "ratio": 10.430421247164546,
+          "against": [
+            255,
+            255,
+            255
+          ]
+        },
+        "--chart-5": {
+          "color": "oklch(27.4% .006 286.033)",
+          "ratio": 14.894588477600598,
+          "against": [
+            255,
+            255,
+            255
+          ]
+        }
+      }
+    },
+    {
+      "label": "settings keyboard focus",
+      "theme": "dark",
+      "rows": [
+        {
+          "selector": "[data-slot=\"radio-group-item\"]",
+          "tag": "SPAN",
+          "name": "",
+          "checked": "true",
+          "border": "oklch(0.92 0.004 286.32)",
+          "background": "oklch(0.92 0.004 286.32)",
+          "fill": "rgb(0, 0, 0)",
+          "stroke": "none",
+          "surround": [
+            39,
+            39,
+            42
+          ],
+          "borderRatio": 11.73839782761943,
+          "fillRatio": 1.4099080368404333,
+          "strokeRatio": 1.189476641446368,
+          "boxShadow": "none",
+          "outline": "oklab(0.552 0.00439355 -0.015385 / 0.5) none 3px"
+        },
+        {
+          "selector": "[data-slot=\"radio-group-item\"]",
+          "tag": "SPAN",
+          "name": "",
+          "checked": "false",
+          "border": "oklch(1 0 0 / 0.15)",
+          "background": "oklab(1 0 0 / 0.045)",
+          "fill": "rgb(0, 0, 0)",
+          "stroke": "none",
+          "surround": [
+            9,
+            9,
+            11
+          ],
+          "borderRatio": 1.4606132027292844,
+          "fillRatio": 1.0555226180036603,
+          "strokeRatio": 19.061142529601344,
+          "boxShadow": "none",
+          "outline": "oklab(0.552 0.00439355 -0.015385 / 0.5) none 3px"
+        },
+        {
+          "selector": "[data-slot=\"radio-group-item\"]",
+          "tag": "SPAN",
+          "name": "",
+          "checked": "false",
+          "border": "oklch(1 0 0 / 0.15)",
+          "background": "oklab(1 0 0 / 0.045)",
+          "fill": "rgb(0, 0, 0)",
+          "stroke": "none",
+          "surround": [
+            9,
+            9,
+            11
+          ],
+          "borderRatio": 1.4606132027292844,
+          "fillRatio": 1.0555226180036603,
+          "strokeRatio": 19.061142529601344,
+          "boxShadow": "none",
+          "outline": "oklab(0.552 0.00439355 -0.015385 / 0.5) none 3px"
+        },
+        {
+          "selector": "input[data-slot=\"input\"]",
+          "tag": "INPUT",
+          "name": "Connection timeout (seconds)",
+          "checked": null,
+          "border": "oklch(0.552 0.016 285.938)",
+          "background": "oklab(1 0 0 / 0.045)",
+          "fill": "rgb(0, 0, 0)",
+          "stroke": "none",
+          "surround": [
+            9,
+            9,
+            11
+          ],
+          "borderRatio": 4.121375538920402,
+          "fillRatio": 1.0555226180036603,
+          "strokeRatio": 19.061142529601344,
+          "boxShadow": "rgba(0, 0, 0, 0) 0px 0px 0px 0px, rgba(0, 0, 0, 0) 0px 0px 0px 0px, rgba(0, 0, 0, 0) 0px 0px 0px 0px, oklab(0.552 0.00439355 -0.015385 / 0.3) 0px 0px 0px 2px, rgba(0, 0, 0, 0) 0px 0px 0px 0px",
+          "outline": "oklch(0.985 0 0) solid 2px"
+        },
+        {
+          "selector": "input[data-slot=\"input\"]",
+          "tag": "INPUT",
+          "name": "Default execution timeout (seconds)",
+          "checked": null,
+          "border": "oklch(1 0 0 / 0.15)",
+          "background": "oklab(1 0 0 / 0.045)",
+          "fill": "rgb(0, 0, 0)",
+          "stroke": "none",
+          "surround": [
+            9,
+            9,
+            11
+          ],
+          "borderRatio": 1.4606132027292844,
+          "fillRatio": 1.0555226180036603,
+          "strokeRatio": 19.061142529601344,
+          "boxShadow": "none",
+          "outline": "oklab(0.552 0.00439355 -0.015385 / 0.5) none 3px"
+        },
+        {
+          "selector": "input[data-slot=\"input\"]",
+          "tag": "INPUT",
+          "name": "Approval timeout (seconds)",
+          "checked": null,
+          "border": "oklch(1 0 0 / 0.15)",
+          "background": "oklab(1 0 0 / 0.045)",
+          "fill": "rgb(0, 0, 0)",
+          "stroke": "none",
+          "surround": [
+            9,
+            9,
+            11
+          ],
+          "borderRatio": 1.4606132027292844,
+          "fillRatio": 1.0555226180036603,
+          "strokeRatio": 19.061142529601344,
+          "boxShadow": "none",
+          "outline": "oklab(0.552 0.00439355 -0.015385 / 0.5) none 3px"
+        },
+        {
+          "selector": "input[data-slot=\"input\"]",
+          "tag": "INPUT",
+          "name": "",
+          "checked": null,
+          "border": "oklch(1 0 0 / 0.15)",
+          "background": "oklab(1 0 0 / 0.045)",
+          "fill": "rgb(0, 0, 0)",
+          "stroke": "none",
+          "surround": [
+            9,
+            9,
+            11
+          ],
+          "borderRatio": 1.4606132027292844,
+          "fillRatio": 1.0555226180036603,
+          "strokeRatio": 19.061142529601344,
+          "boxShadow": "none",
+          "outline": "oklab(0.552 0.00439355 -0.015385 / 0.5) none 3px"
+        },
+        {
+          "selector": "input[data-slot=\"input\"]",
+          "tag": "INPUT",
+          "name": "Maximum age (days)",
+          "checked": null,
+          "border": "oklch(1 0 0 / 0.15)",
+          "background": "oklab(1 0 0 / 0.045)",
+          "fill": "rgb(0, 0, 0)",
+          "stroke": "none",
+          "surround": [
+            9,
+            9,
+            11
+          ],
+          "borderRatio": 1.4606132027292844,
+          "fillRatio": 1.0555226180036603,
+          "strokeRatio": 19.061142529601344,
+          "boxShadow": "none",
+          "outline": "oklab(0.552 0.00439355 -0.015385 / 0.5) none 3px"
+        },
+        {
+          "selector": "input[data-slot=\"input\"]",
+          "tag": "INPUT",
+          "name": "Maximum size (MB)",
+          "checked": null,
+          "border": "oklch(1 0 0 / 0.15)",
+          "background": "oklab(1 0 0 / 0.045)",
+          "fill": "rgb(0, 0, 0)",
+          "stroke": "none",
+          "surround": [
+            9,
+            9,
+            11
+          ],
+          "borderRatio": 1.4606132027292844,
+          "fillRatio": 1.0555226180036603,
+          "strokeRatio": 19.061142529601344,
+          "boxShadow": "none",
+          "outline": "oklab(0.552 0.00439355 -0.015385 / 0.5) none 3px"
+        },
+        {
+          "selector": "[data-slot=\"switch\"]",
+          "tag": "SPAN",
+          "name": "Connection diagnostics",
+          "checked": "false",
+          "border": "rgba(0, 0, 0, 0)",
+          "background": "oklab(1 0 0 / 0.12)",
+          "fill": "rgb(0, 0, 0)",
+          "stroke": "none",
+          "surround": [
+            9,
+            9,
+            11
+          ],
+          "borderRatio": 1,
+          "fillRatio": 1.0555226180036603,
+          "strokeRatio": 19.061142529601344,
+          "boxShadow": "none",
+          "outline": "oklab(0.552 0.00439355 -0.015385 / 0.5) none 3px"
+        },
+        {
+          "selector": "[data-slot=\"switch\"]",
+          "tag": "SPAN",
+          "name": "Mute approval sound",
+          "checked": "false",
+          "border": "rgba(0, 0, 0, 0)",
+          "background": "oklab(1 0 0 / 0.12)",
+          "fill": "rgb(0, 0, 0)",
+          "stroke": "none",
+          "surround": [
+            9,
+            9,
+            11
+          ],
+          "borderRatio": 1,
+          "fillRatio": 1.0555226180036603,
+          "strokeRatio": 19.061142529601344,
+          "boxShadow": "none",
+          "outline": "oklab(0.552 0.00439355 -0.015385 / 0.5) none 3px"
+        },
+        {
+          "selector": "[data-slot=\"switch\"]",
+          "tag": "SPAN",
+          "name": "Journal enabled",
+          "checked": "true",
+          "border": "rgba(0, 0, 0, 0)",
+          "background": "oklch(0.92 0.004 286.32)",
+          "fill": "rgb(0, 0, 0)",
+          "stroke": "none",
+          "surround": [
+            9,
+            9,
+            11
+          ],
+          "borderRatio": 1,
+          "fillRatio": 1.0555226180036603,
+          "strokeRatio": 19.061142529601344,
+          "boxShadow": "none",
+          "outline": "oklab(0.552 0.00439355 -0.015385 / 0.5) none 3px"
+        },
+        {
+          "selector": "[data-slot=\"switch\"]",
+          "tag": "SPAN",
+          "name": "Store sensitive data",
+          "checked": "true",
+          "border": "rgba(0, 0, 0, 0)",
+          "background": "oklch(0.92 0.004 286.32)",
+          "fill": "rgb(0, 0, 0)",
+          "stroke": "none",
+          "surround": [
+            9,
+            9,
+            11
+          ],
+          "borderRatio": 1,
+          "fillRatio": 1.0555226180036603,
+          "strokeRatio": 19.061142529601344,
+          "boxShadow": "none",
+          "outline": "oklab(0.552 0.00439355 -0.015385 / 0.5) none 3px"
+        },
+        {
+          "selector": "[data-slot=\"switch\"]",
+          "tag": "SPAN",
+          "name": "Agent operation annotations",
+          "checked": "true",
+          "border": "rgba(0, 0, 0, 0)",
+          "background": "oklch(0.92 0.004 286.32)",
+          "fill": "rgb(0, 0, 0)",
+          "stroke": "none",
+          "surround": [
+            9,
+            9,
+            11
+          ],
+          "borderRatio": 1,
+          "fillRatio": 1.0555226180036603,
+          "strokeRatio": 19.061142529601344,
+          "boxShadow": "none",
+          "outline": "oklab(0.552 0.00439355 -0.015385 / 0.5) none 3px"
+        },
+        {
+          "selector": "[data-slot=\"switch\"]",
+          "tag": "SPAN",
+          "name": "Retention enabled",
+          "checked": "false",
+          "border": "rgba(0, 0, 0, 0)",
+          "background": "oklab(1 0 0 / 0.12)",
+          "fill": "rgb(0, 0, 0)",
+          "stroke": "none",
+          "surround": [
+            9,
+            9,
+            11
+          ],
+          "borderRatio": 1,
+          "fillRatio": 1.0555226180036603,
+          "strokeRatio": 19.061142529601344,
+          "boxShadow": "none",
+          "outline": "oklab(0.552 0.00439355 -0.015385 / 0.5) none 3px"
+        }
+      ],
+      "tokens": {
+        "--input": {
+          "color": "oklch(100% 0 0/.15)",
+          "ratio": 1.4606132027292844,
+          "against": [
+            9,
+            9,
+            11
+          ]
+        },
+        "--ring": {
+          "color": "oklch(55.2% .016 285.938)",
+          "ratio": 4.121375538920402,
+          "against": [
+            9,
+            9,
+            11
+          ]
+        },
+        "--chart-1": {
+          "color": "oklch(87.1% .006 286.286)",
+          "ratio": 13.460987437168084,
+          "against": [
+            9,
+            9,
+            11
+          ]
+        },
+        "--chart-2": {
+          "color": "oklch(55.2% .016 285.938)",
+          "ratio": 4.121375538920402,
+          "against": [
+            9,
+            9,
+            11
+          ]
+        },
+        "--chart-3": {
+          "color": "oklch(44.2% .017 285.786)",
+          "ratio": 2.577136951606669,
+          "against": [
+            9,
+            9,
+            11
+          ]
+        },
+        "--chart-4": {
+          "color": "oklch(37% .013 285.805)",
+          "ratio": 1.9074356811988815,
+          "against": [
+            9,
+            9,
+            11
+          ]
+        },
+        "--chart-5": {
+          "color": "oklch(27.4% .006 286.033)",
+          "ratio": 1.3357440312430557,
+          "against": [
+            9,
+            9,
+            11
+          ]
+        }
+      }
+    },
+    {
+      "label": "session A/B",
+      "theme": "",
+      "rows": [
+        {
+          "selector": "[data-slot=\"checkbox\"]",
+          "tag": "SPAN",
+          "name": "",
+          "checked": "false",
+          "border": "oklch(0.92 0.004 286.32)",
+          "background": "rgba(0, 0, 0, 0)",
+          "fill": "rgb(0, 0, 0)",
+          "stroke": "none",
+          "surround": [
+            255,
+            255,
+            255
+          ],
+          "borderRatio": 1.2688774649087908,
+          "fillRatio": 21,
+          "strokeRatio": 19.895357656776593,
+          "boxShadow": "none",
+          "outline": "oklab(0.705 0.00415141 -0.0144141 / 0.5) none 3px"
+        }
+      ],
+      "tokens": {
+        "--input": {
+          "color": "oklch(92% .004 286.32)",
+          "ratio": 1.2688774649087908,
+          "against": [
+            255,
+            255,
+            255
+          ]
+        },
+        "--ring": {
+          "color": "oklch(70.5% .015 286.067)",
+          "ratio": 2.622916413268822,
+          "against": [
+            255,
+            255,
+            255
+          ]
+        },
+        "--chart-1": {
+          "color": "oklch(87.1% .006 286.286)",
+          "ratio": 1.4780013538859798,
+          "against": [
+            255,
+            255,
+            255
+          ]
+        },
+        "--chart-2": {
+          "color": "oklch(55.2% .016 285.938)",
+          "ratio": 4.827358601247048,
+          "against": [
+            255,
+            255,
+            255
+          ]
+        },
+        "--chart-3": {
+          "color": "oklch(44.2% .017 285.786)",
+          "ratio": 7.719945827625962,
+          "against": [
+            255,
+            255,
+            255
+          ]
+        },
+        "--chart-4": {
+          "color": "oklch(37% .013 285.805)",
+          "ratio": 10.430421247164546,
+          "against": [
+            255,
+            255,
+            255
+          ]
+        },
+        "--chart-5": {
+          "color": "oklch(27.4% .006 286.033)",
+          "ratio": 14.894588477600598,
+          "against": [
+            255,
+            255,
+            255
+          ]
+        }
+      }
+    }
+  ],
+  "limitations": [],
+  "browser": "156.0.8078.4",
+  "finishedAt": "2026-11-11T08:09:49.927Z"
+}

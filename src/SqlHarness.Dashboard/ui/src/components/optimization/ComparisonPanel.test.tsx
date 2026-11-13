@@ -80,10 +80,10 @@ test("shows the engine IO message and action links and copies the panel Markdown
   expect(await screen.findByText("per-table IO not available for this engine")).toBeInTheDocument()
   expect(screen.getByRole("tab", { name: "SQL diff" })).toBeInTheDocument()
   await userEvent.click(screen.getByRole("tab", { name: "SQL diff" }))
-  expect(screen.queryByText("Comparison evidence and scripts")).not.toBeInTheDocument()
+  expect(screen.getByRole("link", { name: "Plans for v0" })).toHaveAttribute("href", expect.stringContaining("/operations/214"))
   expect(screen.getAllByRole("link", { name: "Operation #214" }).every(link => link.getAttribute("href")?.includes("/operations/214"))).toBe(true)
-  expect(await screen.findAllByRole("button", { name: "Copy script (as executed)" })).toHaveLength(2)
-  await screen.findAllByRole("button", { name: "Copy script (local variables)" })
+  expect(await screen.findAllByRole("button", { name: /^Copy (Baseline|Candidate).*script \(as executed\)$/ })).toHaveLength(2)
+  await screen.findAllByRole("button", { name: /^Copy (Baseline|Candidate).*script \(local variables\)$/ })
   expect(calls.filter(call => call.includes("/repro?")).every(call => call.includes("case=customer-9001"))).toBe(true)
   await userEvent.click(screen.getByRole("button", { name: "Copy summary" }))
   await expect.poll(() => writeText.mock.calls[0]?.[0]).toBe([
@@ -140,7 +140,7 @@ test("reproduction actions resolve a selected fingerprint to each side's raw cas
     }
   }
   expect(screen.queryByText("Comparison evidence and scripts")).not.toBeInTheDocument()
-  expect(screen.queryByText("Elapsed (median)")).not.toBeInTheDocument()
+  expect(within(screen.getByRole("region", { name: "Version comparison" })).queryByText("Elapsed (median)")).not.toBeInTheDocument()
 })
 
 test("operation navigation round-trips the selected multi-group session search", async () => {
@@ -178,8 +178,8 @@ test("shows PostgreSQL CPU and buffer totals in the panel and copied summary whe
   renderPanel({ ...comparison, tableIoUnavailable: true, tables: [], cpuBeforeMs: 12, cpuAfterMs: 8,
     buffersBefore: { sharedHit: 7, sharedRead: 2, sharedDirtied: 1, sharedWritten: 0, tempRead: 0, tempWritten: 3 },
     buffersAfter: { sharedHit: 5, sharedRead: 1, sharedDirtied: 0, sharedWritten: 0, tempRead: 0, tempWritten: 1 } })
-  expect(await screen.findByRole("columnheader", { name: "CPU (sum of case medians)" })).toBeInTheDocument()
   await userEvent.click(await screen.findByRole("tab", { name: "IO" }))
+  expect(screen.queryByText("12 → 8", { exact: false })).not.toBeInTheDocument()
   expect(screen.getByText(/shared hit 7, shared read 2/)).toBeInTheDocument()
   await userEvent.click(screen.getByRole("button", { name: "Copy summary" }))
   await expect.poll(() => writeText.mock.calls[0]?.[0]).toContain("| CPU (sum of case medians, ms) | 12 | 8 |")
@@ -200,7 +200,7 @@ test("view selection is URL-backed and the query receives the selected view", as
 
   await userEvent.click(await screen.findByRole("tab", { name: "IO" }))
   expect(screen.getByRole("radio", { name: "By statement" })).toBeChecked()
-  expect(screen.getByText("Verdict basis: changed statements")).toBeInTheDocument()
+  expect(screen.getByText("basis: changed statements")).toBeInTheDocument()
   await userEvent.click(screen.getByRole("radio", { name: "Whole batch" }))
   expect(router.state.location.search).toMatchObject({ view: "whole" })
   await expect.poll(() => calls.some(call => new URL(call, "http://dashboard").searchParams.get("view") === "whole")).toBe(true)
@@ -213,12 +213,10 @@ test("incomplete attribution visibly falls back to Whole batch", async () => {
     wholeBatch: { before: 500, after: 650, shared: null, label: "whole batch: 500 → 650 reads (shared statements: unavailable)",
       sharedBefore: null, sharedAfter: null, changedBefore: null, changedAfter: null }, statements: [] })
 
-  expect(await screen.findByRole("tab", { name: "IO" })).toBeInTheDocument()
-  expect(screen.queryByText("per-statement attribution incomplete")).not.toBeInTheDocument()
-  await userEvent.click(screen.getByRole("tab", { name: "IO" }))
+  await userEvent.click(await screen.findByRole("tab", { name: "IO" }))
   expect(screen.getByText("Some IO cannot be attributed to individual statements. IO assessment uses the whole batch.")).toBeInTheDocument()
-  expect(screen.getByRole("radio", { name: "Whole batch" })).toBeChecked()
-  expect(screen.getByText("Verdict basis: whole batch")).toBeInTheDocument()
+  expect(screen.getByRole("radio", { name: "By statement" })).toBeChecked()
+  expect(screen.getByText("basis: whole batch")).toBeInTheDocument()
 })
 
 test("approximate comparison shows per-case rows and coverage", async () => {
@@ -240,4 +238,34 @@ test("approximate comparison without paired cases hides metric totals", async ()
   renderPanel({ ...comparison, a: "v0", b: "v0", basis: "ApproximateAcrossConditions", groupA: "fp-a", groupB: "fp-b", groupLabelA: "Cold cache", groupLabelB: "Warm cache", equivalenceLabel: "", mixed: null })
   expect(await screen.findByText("A: Cold cache")).toBeInTheDocument()
   expect(screen.getByText("B: Warm cache")).toBeInTheDocument()
+})
+
+
+test("partial attribution does not trap the operator outside confirmed statement evidence", async () => {
+  renderPanel({ ...comparison, view: "whole", fallbackNote: "per-statement attribution incomplete", verdictBasis: "whole batch", statements: [{ key: "confirmed", occurrence: 0, text: "SELECT confirmed", status: "different-work", readsBefore: 100, readsAfter: 25, scansBefore: 1, scansAfter: 1, executions: 1, change: "-75%", attribution: "confirmed", objects: [], hiddenWork: [], planHashBefore: null, planHashAfter: null, planLinkBefore: null, planLinkAfter: null, udfElapsedMilliseconds: null }] })
+  await userEvent.click(await screen.findByRole("tab", { name: "IO" }))
+  await userEvent.click(screen.getByRole("radio", { name: "By statement" }))
+  expect(screen.getByRole("button", { name: "SELECT confirmed" })).toBeInTheDocument()
+  expect(screen.getByText("basis: whole batch")).toBeInTheDocument()
+})
+
+
+test("provenance remains visible and the duplicate evidence drawer is removed", async () => {
+  renderPanel()
+  const panel = await screen.findByRole("region", { name: "Version comparison" })
+  expect(within(panel).getByRole("link", { name: "Operation #214" })).toBeVisible()
+  expect(within(panel).queryByText("Comparison evidence and scripts")).not.toBeInTheDocument()
+  expect(within(panel).queryByText("Elapsed (median)")).not.toBeInTheDocument()
+  expect(within(panel).getByRole("region", { name: "Baseline v0 scripts" })).toBeInTheDocument()
+  expect(within(panel).getByRole("region", { name: "Candidate v3 scripts" })).toBeInTheDocument()
+})
+
+
+test("scripts do not bind a raw case ID omitted from a modern fingerprint map", async () => {
+  const payload: OptimizationComparison = { ...comparison, cases: [{ id: "selected", label: "Ambiguous", outcome: "unavailable" }], beforeAction: { operationId: 214, side: "baseline", caseIds: ["selected"], caseIdsByFingerprint: {} }, afterAction: { operationId: 214, side: "candidate", caseIds: ["selected"], caseIdsByFingerprint: {} } }
+  const { calls } = renderPanel(payload)
+  await screen.findByText("measured together in #214")
+  expect(screen.queryByRole("region", { name: "Baseline v0 scripts" })).not.toBeInTheDocument()
+  expect(screen.queryByRole("region", { name: "Candidate v3 scripts" })).not.toBeInTheDocument()
+  expect(calls.some(call => call.includes("/repro?"))).toBe(false)
 })

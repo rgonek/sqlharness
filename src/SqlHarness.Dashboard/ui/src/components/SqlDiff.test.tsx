@@ -89,3 +89,15 @@ test("embedded over-limit diff keeps full candidate SQL copyable", async () => {
   await userEvent.click(screen.getByRole("button", { name: "Copy candidate SQL" }))
   await waitFor(() => expect(writeText).toHaveBeenCalledWith(candidate))
 })
+
+test("embedded SQL actions name their side and track updated case actions", async () => {
+  const { rerender } = render(<SqlDiff embedded baseline="SELECT 1" candidate="SELECT 2" engine={null}
+    baselineActions={<button>Copy baseline case one script</button>} candidateActions={<button>Copy candidate case one script</button>} />)
+  expect(screen.getByRole("group", { name: "Baseline SQL actions" })).toHaveTextContent("Copy baseline case one script")
+  expect(screen.getByRole("group", { name: "Candidate SQL actions" })).toHaveTextContent("Copy candidate case one script")
+  expect(screen.getByRole("button", { name: "Copy candidate SQL" })).toHaveTextContent("Copy candidate SQL")
+  rerender(<SqlDiff embedded baseline="SELECT 1" candidate="SELECT 3" engine={null}
+    candidateActions={<button>Copy candidate case two script</button>} />)
+  expect(screen.queryByRole("button", { name: /case one script/ })).not.toBeInTheDocument()
+  expect(screen.getByRole("group", { name: "Candidate SQL actions" })).toHaveTextContent("case two")
+})

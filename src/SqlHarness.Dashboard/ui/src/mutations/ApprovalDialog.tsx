@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react"
+import { useEffect, useMemo, useRef, useState } from "react"
 import { Alert, AlertDescription } from "@/components/ui/alert"
 import { Separator } from "@/components/ui/separator"
 import { Button } from "@/components/ui/button"
@@ -14,6 +14,10 @@ import { postMutationDecision } from "@/api/client"
 import { mutationStore, usePendingMutations } from "./mutationStore"
 
 export function ApprovalDialog({ requestId }: { requestId: string | null }) {
+  const reviewedRequest = useRef(requestId)
+  useEffect(() => {
+    if (requestId !== null) reviewedRequest.current = requestId
+  }, [requestId])
   const pending = usePendingMutations()
   const item = pending.find(request => request.requestId === requestId)
   const [openedAtState, setOpenedAtState] = useState<{ requestId: string | null; time: number | null }>({ requestId: null, time: null })
@@ -55,7 +59,7 @@ export function ApprovalDialog({ requestId }: { requestId: string | null }) {
   const open = requestId !== null && (item !== undefined || Boolean(message))
   return (
     <Dialog open={open} onOpenChange={value => { if (!value) close() }}>
-      <DialogContent className="mutation-dialog max-h-[90vh] overflow-y-auto sm:max-w-[720px]" onKeyDownCapture={event => { if (event.key === "Enter") event.preventDefault() }}>
+      <DialogContent finalFocus={() => [...document.querySelectorAll<HTMLElement>("[data-mutation-review]")].find(element => element.dataset.mutationReview === reviewedRequest.current) ?? true} className="mutation-dialog max-h-[90vh] overflow-y-auto sm:max-w-[720px]" onKeyDownCapture={event => { if (event.key === "Enter") event.preventDefault() }}>
         {item ? <>
           <DialogHeader className="pr-6">
             <DialogTitle className="flex flex-wrap items-center gap-3">

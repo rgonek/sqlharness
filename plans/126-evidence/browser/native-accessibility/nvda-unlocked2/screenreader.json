@@ -1,0 +1,23 @@
+{
+  "startedAt": "2026-11-11T16:20:37.798Z",
+  "mode": "screenreader",
+  "origin": "http://127.0.0.1:<isolated>",
+  "revision": "feac8548bc136f1c3f869f9962d720fcb5b40289",
+  "workingDiffSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+  "checks": [],
+  "limitations": [],
+  "browser": "156.0.8078.4",
+  "nvdaPid": 26704,
+  "error": "Error: Command failed: powershell.exe -NoProfile -Command Add-Type -TypeDefinition 'using System; using System.Text; using System.Runtime.InteropServices; public class AuditNativeFocus { [DllImport(\"user32.dll\")] public static extern IntPtr GetForegroundWindow(); [DllImport(\"user32.dll\",CharSet=CharSet.Unicode)] public static extern int GetWindowText(IntPtr h, StringBuilder text, int count); }'; $s=New-Object -ComObject WScript.Shell; if(-not $s.AppActivate('SQLHarness native accessibility audit')){throw 'Owned audit browser not active'}; $auditTitle=New-Object System.Text.StringBuilder 256; for($auditAttempt=0;$auditAttempt -lt 20;$auditAttempt++){[void]$auditTitle.Clear();[void][AuditNativeFocus]::GetWindowText([AuditNativeFocus]::GetForegroundWindow(),$auditTitle,256);if($auditTitle.ToString().StartsWith('SQLHarness native accessibility audit')){break};Start-Sleep -Milliseconds 50}; if(-not $auditTitle.ToString().StartsWith('SQLHarness native accessibility audit')){throw 'Owned browser is not native foreground; no key sent'}; $s.SendKeys('{TAB}')\nOwned browser is not native foreground; no key sent\r\nAt line:1 char:926\r\n+ ... ty audit')){throw 'Owned browser is not native foreground; no key sen ...\r\n+                 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~\r\n    + CategoryInfo          : OperationStopped: (Owned browser i...nd; no key sent:String) [], RuntimeException\r\n    + FullyQualifiedErrorId : Owned browser is not native foreground; no key sent\r\n \r\n\n    at genericNodeError (node:internal/errors:985:15)\n    at wrappedFn (node:internal/errors:539:14)\n    at checkExecSyncError (node:child_process:925:11)\n    at execFileSync (node:child_process:961:15)\n    at nativeKey (file:///C:/Users/rgone/MultiCliProfiles/codex/account-b/worktrees/8723/sqlharness/plans/126-evidence/harness/native-accessibility.mjs:33:48)\n    at async step (file:///C:/Users/rgone/MultiCliProfiles/codex/account-b/worktrees/8723/sqlharness/plans/126-evidence/harness/native-accessibility.mjs:92:139)\n    at async file:///C:/Users/rgone/MultiCliProfiles/codex/account-b/worktrees/8723/sqlharness/plans/126-evidence/harness/native-accessibility.mjs:94:4",
+  "assets": [
+    {
+      "path": "/assets/index-BjVrJ4lA.js",
+      "sha256": "1a311497f0531ae3dd4120710d01428d7ec223d25c9f3689b65ad9d680a881fe"
+    },
+    {
+      "path": "/assets/index-DBQ2y8xw.css",
+      "sha256": "c966a401419a9dff037b616ccafa01aade3f6e8db5bc4ad36ec780124081cdba"
+    }
+  ],
+  "finishedAt": "2026-11-11T16:20:55.840Z"
+}

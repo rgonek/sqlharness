@@ -50,3 +50,13 @@ test("all cases without paired metrics opens an action case", async () => {
   render(<QueryClientProvider client={client}><VersionPlan a="v0" b="v1" before={null} after={action} engine="SqlServer" selectedCase="all" /></QueryClientProvider>)
   expect(await screen.findByText("Selected plan case: retained")).toBeInTheDocument()
 })
+
+
+test.each(["selected", "all"])("modern omitted fingerprint cannot bind a colliding raw case for %s", async selectedCase => {
+  stubFetch({ "/api/operations/10": operationDetail({ variants: [variant({ variant: "candidate", caseId: "selected" })] }) })
+  const client = new QueryClient({ defaultOptions: { queries: { retry: false } } }); trackQueryClient(client)
+  const action: OptimizationActionReference = { operationId: 10, side: "candidate", caseIds: ["selected"], caseIdsByFingerprint: {} }
+  render(<QueryClientProvider client={client}><VersionPlan a="A" b="B" before={null} after={action} engine="SqlServer" selectedCase={selectedCase} /></QueryClientProvider>)
+  expect(await screen.findByText("No retained plan variant for this selection.")).toBeInTheDocument()
+  expect(screen.queryByText("Selected plan case: selected")).not.toBeInTheDocument()
+})

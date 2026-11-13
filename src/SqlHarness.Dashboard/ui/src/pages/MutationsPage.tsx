@@ -10,7 +10,7 @@ function ranWithoutProductionApproval(mode: string, verification: string | null,
 
 export function MutationsPage() {
   const query = useMutationHistory()
-  if (query.error && !query.data) return <ErrorState error={query.error} />
+  if (query.error && !query.data) return <ErrorState error={query.error} onRetry={() => void query.refetch()} retrying={query.isFetching} />
   if (query.isPending) return <Skeleton className="h-64 w-full" />
   const items = query.data.pages.flatMap(page => page.items)
   return (

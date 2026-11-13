@@ -4,6 +4,7 @@ export type ThemeMode = "system" | "light" | "dark"
 
 const storageKey = "sqlharness.theme"
 const darkQuery = "(prefers-color-scheme: dark)"
+let transitionFrame: number | undefined
 
 /** The remembered mode; storage can be missing or blocked, which means "system". */
 export function readThemeMode(): ThemeMode {
@@ -26,7 +27,17 @@ export function writeThemeMode(mode: ThemeMode): void {
 /** Toggles the `dark` class that shadcn's theme uses. */
 export function applyTheme(mode: ThemeMode): void {
   const dark = mode === "dark" || (mode === "system" && window.matchMedia(darkQuery).matches)
-  document.documentElement.classList.toggle("dark", dark)
+  const root = document.documentElement
+  if (root.classList.contains("dark") === dark) return
+  if (transitionFrame !== undefined) window.cancelAnimationFrame(transitionFrame)
+  root.classList.add("theme-changing")
+  root.classList.toggle("dark", dark)
+  transitionFrame = window.requestAnimationFrame(() => {
+    transitionFrame = window.requestAnimationFrame(() => {
+      root.classList.remove("theme-changing")
+      transitionFrame = undefined
+    })
+  })
 }
 
 export function useTheme(): { mode: ThemeMode; setMode: (mode: ThemeMode) => void } {

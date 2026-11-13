@@ -169,9 +169,18 @@ public static class OptimizationSummaryBuilder
                     .ThenBy(item => item.Compare.OperationId).ToArray();
                 var latest = measurements[^1];
                 var metrics = MetricsFor(latest.Compare, latest.Variant);
-                var reads = metrics.Select(metric => metric.LogicalReadsMedian).Where(value => value.HasValue).Select(value => value!.Value).ToArray();
-                var scans = metrics.Select(metric => metric.ScansSum).ToArray();
-                var elapsed = metrics.Select(metric => metric.ElapsedMedianMs).Where(value => value.HasValue).Select(value => value!.Value).Order().ToArray();
+                var expectedCases = latest.Compare.Cases;
+                var metricCases = expectedCases.Select(c =>
+                {
+                    var metric = metrics.FirstOrDefault(m => m.CaseId == c.CaseId);
+                    return new VersionCaseMetric(c.MeasurementFingerprint ?? c.CaseId, c.CaseId, c.Label,
+                        metric?.LogicalReadsMedian, metric?.ScansSum, metric?.ElapsedMedianMs, metric?.CpuMedianMs)
+                    { VaryingFingerprint = c.VaryingFingerprint };
+                }).ToArray();
+                var reads = metricCases.Select(metric => metric.LogicalReads).ToArray();
+                var scans = metricCases.Select(metric => metric.Scans).ToArray();
+                var elapsed = metricCases.Select(metric => metric.ElapsedMs).ToArray();
+                var cpu = metricCases.Select(metric => metric.CpuMs).ToArray();
                 var latestCompare = measurements.LastOrDefault(item => !item.Compare.IsMeasure);
                 var outcome = latest.Compare.IsMeasure
                     ? latestCompare.Compare is null ? "measured only" : CaseOutcome(latestCompare.Compare, latestCompare.Variant)
@@ -190,13 +199,26 @@ public static class OptimizationSummaryBuilder
                         return before is not null && after is not null
                             && OptimizationComparer.CompareCase(before, after).VerdictBasis == "changed statements";
                     }) ? "changed statements" : "whole batch";
+                var direct = latest.Compare.IsMeasure ? null : latest.Compare;
+                var directBefore = MetricsFor(latest.Compare, latest.Compare.IsMeasure ? "measure" : "baseline")
+                    .GroupBy(m => latest.Compare.Cases.FirstOrDefault(c => c.CaseId == m.CaseId)?.MeasurementFingerprint ?? m.CaseId, StringComparer.Ordinal)
+                    .Where(g => g.Count() == 1).ToDictionary(g => g.Key, g => g.Single(), StringComparer.Ordinal);
+                var directAfter = direct is null ? new Dictionary<string, CompareMetricEvidence>() : MetricsFor(direct, "candidate")
+                    .GroupBy(m => direct.Cases.FirstOrDefault(c => c.CaseId == m.CaseId)?.MeasurementFingerprint ?? m.CaseId, StringComparer.Ordinal)
+                    .Where(g => g.Count() == 1).ToDictionary(g => g.Key, g => g.Single(), StringComparer.Ordinal);
+                var labels = expectedCases.GroupBy(c => c.MeasurementFingerprint ?? c.CaseId, StringComparer.Ordinal)
+                    .ToDictionary(g => g.Key, g => g.First().Label, StringComparer.Ordinal);
+                var outcomeRows = OptimizationOutcomes.Build(direct, directBefore, directAfter, labels.Keys, labels,
+                    forward: true, baseline: latest.Variant == "baseline" || latest.Compare.IsMeasure,
+                    caseCounts: expectedCases.GroupBy(c => c.MeasurementFingerprint ?? c.CaseId, StringComparer.Ordinal)
+                        .ToDictionary(g => g.Key, g => g.Count(), StringComparer.Ordinal));
                 return new VersionRow(
                     group.Key.Version,
                     group.Key.Hash,
-                    reads.Length == 0 ? null : Sum(reads),
-                    reads.Length == 0 ? null : Sum(reads) / reads.Length,
+                    reads.Length == 0 || reads.Any(v => !v.HasValue) ? null : Sum(reads.Select(v => v!.Value)),
+                    reads.Length == 0 || reads.Any(v => !v.HasValue) ? null : Sum(reads.Select(v => v!.Value)) / reads.Length,
                     scans.Length == 0 || scans.Any(value => !value.HasValue) ? null : Sum(scans.Select(value => value!.Value)),
-                    Median(elapsed),
+                    elapsed.Length == 0 || elapsed.Any(v => !v.HasValue) ? null : elapsed.Sum(v => v!.Value),
                     outcome,
                     measurements.Select(item => item.Compare.OperationId).Distinct().Order().ToArray(),
                     latest.Compare.OperationId)
@@ -208,6 +230,10 @@ public static class OptimizationSummaryBuilder
                         { VaryingId = c.VaryingFingerprint };
                     }).ToArray(),
                     VerdictBasis = verdictBasis,
+                    CpuMedianMs = cpu.Length == 0 || cpu.Any(v => !v.HasValue) ? null : cpu.Sum(v => v!.Value),
+                    MetricCases = metricCases,
+                    Outcomes = OptimizationOutcomes.Count(outcomeRows),
+                    CaseOutcomes = outcomeRows,
                     RowsReturnedSum = latest.Compare.Cases.Count == 0 || latest.Compare.Cases.Any(c =>
                         !metrics.Any(m => m.CaseId == c.CaseId && m.RowsReturned.HasValue))
                         ? null : Sum(latest.Compare.Cases.Select(c => metrics.First(m => m.CaseId == c.CaseId).RowsReturned!.Value)),
@@ -221,7 +247,9 @@ public static class OptimizationSummaryBuilder
     private static IReadOnlyList<CompareMetricEvidence> MetricsFor(CompareEvidence compare, string variant) =>
         compare.Metrics.Where(metric => metric.Variant.Equals(variant, StringComparison.OrdinalIgnoreCase))
             .GroupBy(metric => metric.CaseId, StringComparer.Ordinal)
-            .Select(group => group.Last())
+            .Select(group => group.Count() == 1 ? group.Single()
+                : new CompareMetricEvidence(variant, group.Key, "Ambiguous case identity", null, null, null, [])
+                { CaseIdentityAmbiguous = true })
             .OrderBy(metric => metric.CaseId, StringComparer.Ordinal)
             .ToArray();
 
@@ -333,13 +361,6 @@ public static class OptimizationSummaryBuilder
             total = value > long.MaxValue - total ? long.MaxValue : total + value;
         return total;
     }
-
-    private static double? Median(long[] values) => values.Length switch
-    {
-        0 => null,
-        _ when values.Length % 2 == 1 => values[values.Length / 2],
-        _ => ((double)values[values.Length / 2 - 1] + values[values.Length / 2]) / 2,
-    };
 
     private sealed record VersionedCompare(CompareEvidence Compare, string? BaselineVersion, string? CandidateVersion);
 }

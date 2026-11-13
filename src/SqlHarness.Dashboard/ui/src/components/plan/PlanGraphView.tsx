@@ -215,7 +215,7 @@ export function PlanGraphView({
           markerEnd: { type: MarkerType.ArrowClosed, color: "var(--muted-foreground)" },
           style: { stroke: "var(--muted-foreground)", strokeWidth: edgeWidth(rows) },
           label: rows === null ? undefined : formatNumber(rows),
-          labelStyle: { fill: "var(--muted-foreground)", fontSize: 10 },
+          labelStyle: { fill: "var(--muted-foreground)", fontSize: 13 },
           data: { rows },
         })
       }
