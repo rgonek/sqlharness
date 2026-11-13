@@ -453,7 +453,9 @@ Describe 'gate-output.ps1 parallel stages' {
         $result.Name | Should Be 'test'
         $result.ExitCode | Should Be 0
         $result.Skipped | Should Be $false
-        $result.Seconds | Should BeGreaterThan 0
+        # Durations are rounded to tenths; a fast real stage can report 0.0.
+        $result.Seconds | Should BeOfType ([double])
+        $result.Seconds | Should Not BeLessThan 0
         $result.Projects.Count | Should Be 2
         Test-Path (Join-Path $logDir 'test-A.log') | Should Be $true
         Test-Path (Join-Path $logDir 'test-B.log') | Should Be $true
