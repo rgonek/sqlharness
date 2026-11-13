@@ -30,8 +30,4 @@ Choose `sqlharness-win-x64.zip`, `sqlharness-linux-x64.tar.gz`, or `sqlharness-o
 
 ## Validation
 
-- Binary build revision: `ef7084b820fb22cdada273623a63c1faeddac596`. The release tag also includes subsequent documentation updates and CI test portability fixes; application source is unchanged.
-- Windows verification gate passed: UI 570 tests, Core 4,919 passed / 11 skipped, MCP 537 passed / 4 skipped. The unchanged `scripts/verify.ps1` gate was invoked directly under PowerShell without profiles.
-- Self-contained single-file builds succeeded for `win-x64`, `linux-x64`, and `osx-arm64`.
-- The Windows release binary passed version/help, archive extraction, and embedded-dashboard checks, including all three demo views and asserted comparison metrics.
-- Linux and macOS binaries were cross-built on Windows; execution on those operating systems has not been verified in this preparation.
+The exact build revision, verification results, and platform limitations are recorded in the [GitHub release](https://github.com/rgonek/sqlharness/releases/tag/v0.4.0). Each binary reports its release version with `sqlharness --version`.
