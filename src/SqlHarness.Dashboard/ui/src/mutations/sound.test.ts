@@ -4,6 +4,7 @@ import { BUILT_IN_SOUNDS, getSoundPreferences, saveSoundPreferences, validateCus
 test("Warm chime is the default among the three approved notification sounds", async () => {
   const preferences = await getSoundPreferences()
   expect(preferences.selection).toBe("warm-chime")
+  expect(preferences.volume).toBe(22)
   expect(BUILT_IN_SOUNDS.map(sound => sound.label)).toEqual(["Soft ping", "Warm chime", "Glass drop"])
   expect(BUILT_IN_SOUNDS.map(sound => sound.src)).toEqual([
     "/sounds/soft-ping.wav", "/sounds/warm-chime.wav", "/sounds/glass-drop.wav",
@@ -11,7 +12,7 @@ test("Warm chime is the default among the three approved notification sounds", a
 })
 
 test("a failed IndexedDB write rejects while keeping the in-memory preference available", async () => {
-  const preferences = { selection: "glass-drop" as const, muted: true, customAudio: null }
+  const preferences = { selection: "glass-drop" as const, muted: true, customAudio: null, volume: 22 }
   const previousIndexedDb = Object.getOwnPropertyDescriptor(globalThis, "indexedDB")
   Object.defineProperty(globalThis, "indexedDB", { configurable: true, value: undefined })
   try {
@@ -94,11 +95,11 @@ test("sound choice and custom audio bytes survive a fresh module load from Index
   Object.defineProperty(globalThis, "indexedDB", { configurable: true, value: factory as unknown as IDBFactory })
   try {
     const audio = new Blob([new Uint8Array([1, 2, 3])], { type: "audio/ogg" })
-    await saveSoundPreferences({ selection: "custom", muted: true, customAudio: audio })
+    await saveSoundPreferences({ selection: "custom", muted: true, customAudio: audio, volume: 80 })
     vi.resetModules()
     const freshSound = await import("./sound")
     const restored = await freshSound.getSoundPreferences()
-    expect(restored).toEqual({ selection: "custom", muted: true, customAudio: audio })
+    expect(restored).toEqual({ selection: "custom", muted: true, customAudio: audio, volume: 80 })
   } finally {
     if (previousIndexedDb) Object.defineProperty(globalThis, "indexedDB", previousIndexedDb)
     else Reflect.deleteProperty(globalThis, "indexedDB")

@@ -118,7 +118,7 @@ function BrowserSoundSettings() {
     if (!file) return
     const message = await validateCustomSound(file)
     if (message) { setError(message); setNotice(undefined); return }
-    store({ ...(preferences ?? { selection: "warm-chime", muted: false, customAudio: null }), selection: "custom", customAudio: file })
+    store({ ...await getSoundPreferences(), selection: "custom", customAudio: file })
   }
 
   async function requestNotifications() {
@@ -134,9 +134,13 @@ function BrowserSoundSettings() {
         {preferences ? <div className="flex flex-wrap items-center justify-end gap-2"><Select<SoundPreferences["selection"] | "upload"> items={[...BUILT_IN_SOUNDS.map(sound => ({ value: sound.id, label: sound.label })), ...(preferences.customAudio ? [{ value: "custom", label: "Custom audio" }] : []), { value: "upload", label: "Custom audio…" }]} value={preferences.selection} onValueChange={value => { if (value === "upload") document.getElementById("custom-audio")?.click(); else if (value !== null) store({ ...preferences, selection: value }) }}>
           <SelectTrigger id="approval-sound" aria-describedby="approval-sound-description" aria-label="Approval sound" className="w-36"><SelectValue>{value => value === "custom" ? "Custom audio" : BUILT_IN_SOUNDS.find(sound => sound.id === value)?.label ?? ""}</SelectValue></SelectTrigger>
           <SelectContent><SelectGroup>{BUILT_IN_SOUNDS.map(sound => <SelectItem key={sound.id} value={sound.id}>{sound.label}</SelectItem>)}{preferences.customAudio && <SelectItem value="custom">Custom audio</SelectItem>}<SelectItem value="upload">Custom audio…</SelectItem></SelectGroup></SelectContent>
-        </Select><Button type="button" variant="outline" disabled={preferences.muted} aria-label={`Preview ${BUILT_IN_SOUNDS.find(sound => sound.id === preferences.selection)?.label ?? "custom audio"}`} onClick={() => { void previewApprovalSound() }}><HugeiconsIcon icon={PlayIcon} data-icon="inline-start" />Preview</Button></div> : <span>Loading browser-local sound settings…</span>}
+        </Select><Button type="button" variant="outline" disabled={preferences.muted || preferences.volume === 0} aria-label={`Preview ${BUILT_IN_SOUNDS.find(sound => sound.id === preferences.selection)?.label ?? "custom audio"}`} onClick={() => { void previewApprovalSound() }}><HugeiconsIcon icon={PlayIcon} data-icon="inline-start" />Preview</Button></div> : <span>Loading browser-local sound settings…</span>}
       </SettingRow>
       {preferences && <><div className="sr-only"><Label htmlFor="custom-audio">Custom audio file</Label><Input id="custom-audio" tabIndex={-1} type="file" accept=".mp3,.wav,.ogg,audio/mpeg,audio/mp3,audio/wav,audio/x-wav,audio/ogg,application/ogg" onChange={event => { void chooseFile(event.target.files?.[0]); event.target.value = "" }} /><p>Choose an MP3, WAV, or OGG file no larger than {MAX_CUSTOM_SOUND_BYTES / (1024 * 1024)} MiB.</p></div>
+      <SettingRow controlId="approval-sound-volume" title="Approval sound volume" tag="This browser only" description="Applies to the approval sound and its preview.">
+        <input id="approval-sound-volume" type="range" min={0} max={100} value={preferences.volume} aria-label="Approval sound volume" aria-valuetext={`${preferences.volume}%`} onChange={event => store({ ...preferences, volume: event.currentTarget.valueAsNumber })} />
+        <span aria-hidden="true">{preferences.volume}%</span>
+      </SettingRow>
       <SettingRow controlId="approval-sound-muted" title="Mute approval sound" tag="This browser only" description="Keep notifications, silence the sound."><Toggle id="approval-sound-muted" label="Mute approval sound" checked={preferences.muted} onChange={muted => store({ ...preferences, muted })} /></SettingRow></>}
       {error && <p role="alert" className="text-sm text-destructive">{error}</p>}{notice && <p role="status" className="text-sm text-muted-foreground">{notice}</p>}
       <SettingRow title="Browser notifications" tag="This browser only" description="Show a system notification when approval is needed. The browser asks only after you press Enable.">

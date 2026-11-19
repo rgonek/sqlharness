@@ -5,13 +5,13 @@ export const BUILT_IN_SOUNDS = [
 ] as const
 export type BuiltInSoundId = typeof BUILT_IN_SOUNDS[number]["id"]
 export type SoundSelection = BuiltInSoundId | "custom"
-export type SoundPreferences = { selection: SoundSelection; muted: boolean; customAudio: Blob | null }
+export type SoundPreferences = { selection: SoundSelection; muted: boolean; customAudio: Blob | null; volume: number }
 export const MAX_CUSTOM_SOUND_BYTES = 2 * 1024 * 1024
 const ACCEPTED_CUSTOM_AUDIO = new Set(["audio/mpeg", "audio/mp3", "audio/wav", "audio/x-wav", "audio/ogg", "application/ogg"])
 const DATABASE = "sqlharness-dashboard-local"
 const STORE = "mutation-sound"
 const KEY = "preferences"
-const DEFAULTS: SoundPreferences = { selection: "warm-chime", muted: false, customAudio: null }
+const DEFAULTS: SoundPreferences = { selection: "warm-chime", muted: false, customAudio: null, volume: 22 }
 let memoryPreferences: SoundPreferences = DEFAULTS
 let preferencesLoaded = false
 
@@ -29,13 +29,13 @@ async function readPreferences(): Promise<SoundPreferences> {
   if (preferencesLoaded) return memoryPreferences
   try {
     const db = await openDatabase()
-    const value = await new Promise<SoundPreferences | undefined>((resolve, reject) => {
+    const value = await new Promise<Partial<SoundPreferences> | undefined>((resolve, reject) => {
       const request = db.transaction(STORE, "readonly").objectStore(STORE).get(KEY)
-      request.onsuccess = () => resolve(request.result as SoundPreferences | undefined)
+      request.onsuccess = () => resolve(request.result as Partial<SoundPreferences> | undefined)
       request.onerror = () => reject(request.error)
     })
     db.close()
-    if (value) memoryPreferences = value
+    if (value) memoryPreferences = { ...DEFAULTS, ...value }
   } catch { /* Browser-local playback still works with in-memory defaults. */ }
   preferencesLoaded = true
   return memoryPreferences
@@ -85,12 +85,12 @@ export async function validateCustomSound(file: File): Promise<string | null> {
 
 async function play(preview: boolean): Promise<void> {
   const preferences = await readPreferences()
-  if (preferences.muted) return
+  if (preferences.muted || preferences.volume === 0) return
   const builtin = BUILT_IN_SOUNDS.find(item => item.id === preferences.selection)
   if (!builtin && !preferences.customAudio) return
   const objectUrl = builtin ? null : URL.createObjectURL(preferences.customAudio!)
   const audio = new Audio(builtin?.src ?? objectUrl!)
-  audio.volume = 0.22
+  audio.volume = preferences.volume / 100
   if (objectUrl) audio.addEventListener("ended", () => URL.revokeObjectURL(objectUrl), { once: true })
   try { await audio.play() } catch {
     if (objectUrl) URL.revokeObjectURL(objectUrl)
@@ -99,7 +99,7 @@ async function play(preview: boolean): Promise<void> {
   void preview
 }
 
-/** Plays the selected notification sound at low volume; call after a newly observed live request. */
+/** Plays the selected notification sound; call after a newly observed live request. */
 export function playApprovalSound(): Promise<void> { return play(false).catch(() => {}) }
 /** Plays a user-requested preview. The caller should invoke this from a user gesture. */
 export function previewApprovalSound(): Promise<void> { return play(true).catch(() => {}) }

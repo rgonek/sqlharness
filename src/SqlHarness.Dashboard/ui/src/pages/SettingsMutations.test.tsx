@@ -65,7 +65,7 @@ test("approval timeout commits on blur and surfaces the server validation for 10
 
 test("sound selection offers previews, mute, and an inline IndexedDB persistence error", async () => {
   const preview = vi.spyOn(sound, "previewApprovalSound").mockResolvedValue(undefined)
-  vi.spyOn(sound, "getSoundPreferences").mockResolvedValue({ selection: "warm-chime", muted: false, customAudio: null })
+  vi.spyOn(sound, "getSoundPreferences").mockResolvedValue({ selection: "warm-chime", muted: false, customAudio: null, volume: 22 })
   vi.spyOn(sound, "saveSoundPreferences").mockRejectedValue(new Error("IndexedDB is unavailable"))
   routes()
   renderApp("/settings")
@@ -83,7 +83,7 @@ test("sound selection offers previews, mute, and an inline IndexedDB persistence
 })
 
 test("shows a readable custom sound preference when its local audio is missing", async () => {
-  vi.spyOn(sound, "getSoundPreferences").mockResolvedValue({ selection: "custom", muted: false, customAudio: null })
+  vi.spyOn(sound, "getSoundPreferences").mockResolvedValue({ selection: "custom", muted: false, customAudio: null, volume: 22 })
   routes()
   renderApp("/settings")
   const select = await screen.findByRole("combobox", { name: "Approval sound" })
@@ -93,7 +93,7 @@ test("shows a readable custom sound preference when its local audio is missing",
 })
 
 test("custom sound rejects wrong type and oversized files inline without a server upload", async () => {
-  vi.spyOn(sound, "getSoundPreferences").mockResolvedValue({ selection: "warm-chime", muted: false, customAudio: null })
+  vi.spyOn(sound, "getSoundPreferences").mockResolvedValue({ selection: "warm-chime", muted: false, customAudio: null, volume: 22 })
   const put = routes()
   renderApp("/settings")
   const input = await screen.findByLabelText("Custom audio file")
@@ -121,7 +121,7 @@ test("a valid custom audio file is passed to browser-local persistence", async (
 test("notification permission is requested only from its button", async () => {
   const requestPermission = vi.fn().mockResolvedValue("granted")
   Object.defineProperty(window, "Notification", { configurable: true, value: { permission: "default", requestPermission } })
-  vi.spyOn(sound, "getSoundPreferences").mockResolvedValue({ selection: "warm-chime", muted: false, customAudio: null })
+  vi.spyOn(sound, "getSoundPreferences").mockResolvedValue({ selection: "warm-chime", muted: false, customAudio: null, volume: 22 })
   routes()
   renderApp("/settings")
   await screen.findByRole("button", { name: "Enable browser notifications" })
