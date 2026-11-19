@@ -808,7 +808,7 @@ public static class McpToolCatalog
         {
             factory.Tool(ToolNames[0], nameof(McpRequestToolHandlers.CapabilitiesAsync), CapabilitiesDescription, true, false, true, false),
             factory.Tool(ToolNames[1], nameof(McpRequestToolHandlers.QueryAsync), factory.QueryDescription("Run a bounded query against the supplied request scope. " + QueryDescription), true, false, null, true, true),
-            factory.Tool(ToolNames[2], nameof(McpRequestToolHandlers.MutationAsync), MutationDescription, null, false, null, true),
+            factory.Tool(ToolNames[2], nameof(McpRequestToolHandlers.MutationAsync), factory.DescribeMutation(), null, false, null, true),
             factory.Tool(ToolNames[3], nameof(McpRequestToolHandlers.MeasureAsync), factory.BenchmarkDescription(MeasureDescription), null, false, null, true, true),
             factory.Tool(ToolNames[4], process.CompareConfig.RequireContext ? nameof(McpRequestToolHandlers.CompareAsync) : nameof(McpRequestToolHandlers.CompareWithoutContextAsync), factory.BenchmarkDescription(CompareDescription), null, false, null, true, true),
             factory.Tool(ToolNames[5], nameof(McpRequestToolHandlers.WatchAsync), WatchDescription, true, false, null, true, true),
@@ -861,7 +861,7 @@ public static class McpToolCatalog
         {
             factory.Tool(ToolNames[0], nameof(McpToolHandlers.CapabilitiesAsync), CapabilitiesDescription, true, false, true, false),
             factory.Tool(ToolNames[1], nameof(McpToolHandlers.QueryAsync), factory.QueryDescription("Run a bounded query passing the static visible-effects text check; no persistent-mutation flags are offered on this path. Hidden effects beyond the text are limited only by the DB account role prepared outside SQLHarness. Exactly one of inline sql (at most 1 MiB) or a file under an input root. " + QueryDescription), true, false, null, true, true),
-            factory.Tool(ToolNames[2], nameof(McpToolHandlers.MutationAsync), MutationDescription, null, false, null, true),
+            factory.Tool(ToolNames[2], nameof(McpToolHandlers.MutationAsync), factory.DescribeMutation(), null, false, null, true),
             factory.Tool(ToolNames[3], nameof(McpToolHandlers.MeasureAsync), factory.BenchmarkDescription(MeasureDescription), null, false, null, true, true),
             factory.Tool(ToolNames[4], policy.RequireContext ? nameof(McpToolHandlers.CompareAsync) : nameof(McpToolHandlers.CompareWithoutContextAsync), factory.BenchmarkDescription(CompareDescription), null, false, null, true, true),
             factory.Tool(ToolNames[5], nameof(McpToolHandlers.WatchAsync), "Poll a bounded query passing the static visible-effects text check until or untilUnchanged, within interval/maxDuration bounds. " + WatchDescription, true, false, null, true, true),
@@ -943,6 +943,10 @@ public static class McpToolCatalog
         }
 
         public string QueryDescription(string common) => string.IsNullOrEmpty(_guidance.Query) ? common : common + " " + _guidance.Query;
+
+        public string DescribeMutation() => _engine == SqlEngine.SqlServer
+            ? MutationDescription + " SQL Server allows one unnamed BEGIN TRANSACTION at the start and COMMIT or ROLLBACK at the end of a single batch. Policy uses the highest risk tier even with ROLLBACK."
+            : MutationDescription;
 
         public string BenchmarkDescription(string common)
         {

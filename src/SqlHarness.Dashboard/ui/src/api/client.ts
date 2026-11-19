@@ -132,7 +132,12 @@ export async function postJson<T>(path: string, body: unknown): Promise<T> {
 /** Sends an operator decision and returns the server's fixed pending-state conflict without leaking request data. */
 export async function postMutationDecision(requestId: string, decision: "approve" | "deny"): Promise<"ok" | "not-pending" | "busy"> {
   const path = `/api/mutations/${encodeURIComponent(requestId)}/${decision}`
-  const response = await send(path, { method: "POST", credentials: "same-origin", headers: { Accept: "application/json", "X-SqlHarness-Dashboard": "1" } })
+  const response = await send(path, {
+    method: "POST",
+    credentials: "same-origin",
+    headers: { Accept: "application/json", "Content-Type": "application/json", "X-SqlHarness-Dashboard": "1" },
+    body: "{}",
+  })
   if (response.status === 401) throw new UnauthorizedError()
   if (response.status === 409) {
     const body = await response.json().catch(() => undefined) as { status?: string } | undefined

@@ -14,6 +14,9 @@ public class SqlSafetyTierTests
     [InlineData("CREATE TABLE #t (Id int); INSERT #t VALUES (1);", SqlRiskTier.Session)]
     [InlineData("UPDATE dbo.Orders SET Total = 0 WHERE Id = 1", SqlRiskTier.Dml)]
     [InlineData("CREATE TABLE #t (Id int); DELETE dbo.Orders WHERE Id = 1;", SqlRiskTier.Dml)]
+    [InlineData("BEGIN TRANSACTION; UPDATE dbo.Orders SET Total = 0 WHERE Id = 1; COMMIT;", SqlRiskTier.Dml)]
+    [InlineData("BEGIN TRANSACTION; UPDATE dbo.Orders SET Total = 0 WHERE Id = 1; ROLLBACK;", SqlRiskTier.Dml)]
+    [InlineData("BEGIN TRANSACTION; DROP TABLE dbo.Orders; ROLLBACK;", SqlRiskTier.Schema)]
     public void Mutation_usage_reports_the_highest_tier(string sql, object expected)
     {
         var decision = Mutation(sql);
@@ -21,6 +24,15 @@ public class SqlSafetyTierTests
         Assert.Equal((SqlRiskTier)expected, decision.Tier);
         Assert.Equal((SqlRiskTier)expected >= SqlRiskTier.Dml, decision.HasMutation);
     }
+
+    [Theory]
+    [InlineData("BEGIN TRANSACTION; DELETE dbo.Orders;")]
+    [InlineData("BEGIN DISTRIBUTED TRANSACTION; DELETE dbo.Orders; COMMIT;")]
+    [InlineData("BEGIN TRANSACTION; DELETE dbo.Orders; IF 1 = 1 ROLLBACK;")]
+    [InlineData("BEGIN TRANSACTION named; DELETE dbo.Orders; ROLLBACK TRANSACTION named;")]
+    [InlineData("BEGIN TRANSACTION; BEGIN TRANSACTION; DELETE dbo.Orders; COMMIT; COMMIT;")]
+    public void Mutation_rejects_unsupported_transaction_boundaries(string sql) =>
+        Assert.False(Mutation(sql).Allowed);
 
     [Theory]
     [InlineData("SELECT 1 AS A", SqlRiskTier.ReadOnly)]

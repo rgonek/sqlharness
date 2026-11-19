@@ -87,6 +87,7 @@ public sealed class HttpMutationBrokerClient : IMutationBrokerClient
         using var message = new HttpRequestMessage(HttpMethod.Post, new Uri(endpoint.OpenUri, "/api/mutations"));
         message.Headers.Authorization = new AuthenticationHeaderValue("Bearer", token);
         message.Content = new TrackedJsonContent(request);
+        message.Content.Headers.ContentType = new MediaTypeHeaderValue("application/json");
         var content = (TrackedJsonContent)message.Content;
         using var timeout = CancellationTokenSource.CreateLinkedTokenSource(ct);
         var send = client.SendAsync(message, HttpCompletionOption.ResponseHeadersRead, timeout.Token);

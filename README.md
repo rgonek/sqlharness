@@ -403,7 +403,7 @@ sqlharness compare prod-eu --var tenant=acme --var env=uat `
 | `watch` | Poll a bounded read-only query until `--until` / `--until-unchanged` or max duration. |
 | `snapshot` | Capture or `--diff` a named canonical result under `~/.sqlharness/snapshots` (`--force` to replace). |
 | `query` | Run one bounded, classified SQL batch. `query`, `mutation`, `measure` and `compare` take `--dry-run`. |
-| `mutation` | Submit a persistent change through the dashboard mutation policy. |
+| `mutation` | Submit a persistent change through the dashboard mutation policy. SQL Server supports a single explicit transaction around the batch. |
 | `measure` | Collect repeated timing, IO, and plan evidence for one query. |
 | `compare` | Compare baseline and candidate queries, including result equivalence. |
 | `plan` | Distill a showplan XML file or stdin without connecting to a database. |

@@ -81,6 +81,8 @@ internal sealed record SessionMessage(int Number, string Text);
 
 internal static class SqlSessionLogicalBatch
 {
+    internal const string OpenTransactionRolledBack = "open transaction rolled back";
+
     internal static async Task<IReadOnlyList<string>> EndAsync(ISqlSession session, CancellationToken ct)
     {
         var warnings = await session.EndLogicalBatchAsync(ct);
@@ -523,7 +525,7 @@ internal sealed class SqlClientSession(
                     while (await reader.ReadAsync(ct)) { }
             }
 
-            return rolledBack ? ["open transaction rolled back"] : [];
+            return rolledBack ? [SqlSessionLogicalBatch.OpenTransactionRolledBack] : [];
         }
         catch (Exception exception)
         {

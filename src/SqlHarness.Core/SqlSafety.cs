@@ -406,8 +406,16 @@ internal sealed class SqlSafetyClassifier
             // 011/T2, 011/T3: SET targets and table variables are proven
             // against same-batch declarations (Ruling R3).
             var scope = inspection.ScopeOf(batch);
-            foreach (var statement in batch.Statements)
+            var statements = batch.Statements;
+            var transactionWrapped = mutationUsage && statements.Count >= 3 &&
+                statements[0] is BeginTransactionStatement { Distributed: false, MarkDefined: false, MarkDescription: null, Name: null } &&
+                statements[^1] is CommitTransactionStatement { Name: null, DelayedDurabilityOption: OptionState.NotSet }
+                    or RollbackTransactionStatement { Name: null };
+            var first = transactionWrapped ? 1 : 0;
+            var end = transactionWrapped ? statements.Count - 1 : statements.Count;
+            for (var index = first; index < end; index++)
             {
+                var statement = statements[index];
                 var hasUnprovenUse = HasUnprovenTableVariableUse(statement, scope);
                 var classification = ClassifyStatement(statement, scope, readOnlyAdmissions);
                 if (mutationUsage)

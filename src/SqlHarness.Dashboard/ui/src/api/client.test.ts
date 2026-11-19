@@ -1,6 +1,6 @@
 import { describe, expect, test } from "vitest"
 import { stubFetch } from "@/test/render"
-import { ConflictError, FieldErrorsError, getJson, HttpStatusError, NotFoundError, putJson, updateProfile, UnauthorizedError, withQuery } from "./client"
+import { ConflictError, FieldErrorsError, getJson, HttpStatusError, NotFoundError, postMutationDecision, putJson, updateProfile, UnauthorizedError, withQuery } from "./client"
 
 describe("client", () => {
   test("withQuery skips empty values", () => {
@@ -61,4 +61,19 @@ test("updateProfile sends a guarded revision and editable profile", async () => 
   expect(seen?.method).toBe("PUT")
   expect(new Headers(seen?.headers).get("X-SqlHarness-Dashboard")).toBe("1")
   expect(JSON.parse(seen!.body as string)).toMatchObject({ name: "pg", expectedRevision: "rev", profile: { server: "host" } })
+})
+
+
+test.each(["approve", "deny"] as const)("posts a guarded JSON body for %s", async decision => {
+  let seen: RequestInit | undefined
+  globalThis.fetch = (async (_: RequestInfo | URL, init?: RequestInit) => {
+    seen = init
+    return new Response(null, { status: 200 })
+  }) as typeof fetch
+
+  await expect(postMutationDecision("request", decision)).resolves.toBe("ok")
+  expect(seen?.method).toBe("POST")
+  expect(new Headers(seen?.headers).get("X-SqlHarness-Dashboard")).toBe("1")
+  expect(new Headers(seen?.headers).get("Content-Type")).toBe("application/json")
+  expect(seen?.body).toBe("{}")
 })

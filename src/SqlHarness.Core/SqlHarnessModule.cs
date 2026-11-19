@@ -265,6 +265,10 @@ public sealed class SqlHarnessModule : ISqlHarnessModule
                         return raw;
                     },
                     ct);
+            if (query.UsageOverride == SqlUsage.Mutation &&
+                collected.Warnings?.Contains(SqlSessionLogicalBatch.OpenTransactionRolledBack) == true)
+                throw new SessionCleanupException("The mutation left an open transaction that SQLHarness rolled back.",
+                    warnings: collected.Warnings);
             rawFootprint = raw!.Complete().Footprint;
             var targetReport = session.Identity;
             var report = new SqlHarnessQueryReport(

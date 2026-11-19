@@ -714,6 +714,7 @@ public sealed class MutationEndpointsTests
         public bool CorrelationPresent { get; private set; }
         protected override async Task<HttpResponseMessage> SendAsync(HttpRequestMessage request, CancellationToken cancellationToken)
         {
+            Assert.Equal("application/json", request.Content?.Headers.ContentType?.MediaType);
             using var document = JsonDocument.Parse(await request.Content!.ReadAsStringAsync(cancellationToken));
             CorrelationPresent = document.RootElement.GetProperty("preparationToken").GetString() == PreparationToken;
             return new HttpResponseMessage(HttpStatusCode.OK) { Content = JsonContent.Create(new MutationBrokerResult(MutationStatus.Success, null, null)) };
