@@ -506,6 +506,7 @@ public sealed class DashboardServerTests
         Assert.Equal("no-referrer", response.Headers.GetValues("Referrer-Policy").Single());
         Assert.Equal("DENY", response.Headers.GetValues("X-Frame-Options").Single());
         Assert.Contains("default-src 'self'", response.Headers.GetValues("Content-Security-Policy").Single());
+        Assert.Contains("media-src 'self' blob:", response.Headers.GetValues("Content-Security-Policy").Single());
     }
 
     [Fact]

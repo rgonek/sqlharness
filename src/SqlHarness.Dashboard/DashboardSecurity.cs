@@ -62,7 +62,7 @@ internal static class DashboardSecurity
         headers["Referrer-Policy"] = "no-referrer";
         headers.XFrameOptions = "DENY";
         headers.ContentSecurityPolicy =
-            "default-src 'self'; connect-src 'self'; img-src 'self' data:; style-src 'self' 'unsafe-inline'; script-src 'self'; frame-ancestors 'none'";
+            "default-src 'self'; connect-src 'self'; img-src 'self' data:; media-src 'self' blob:; style-src 'self' 'unsafe-inline'; script-src 'self'; frame-ancestors 'none'";
     }
 
     private static async Task GuardAsync(HttpContext context, Func<Task> next, string token, Func<int> port)
