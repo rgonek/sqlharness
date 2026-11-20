@@ -106,7 +106,7 @@ test("custom sound rejects wrong type and oversized files inline without a serve
   expect(put).toHaveLength(0)
 })
 
-test("a valid custom audio file is passed to browser-local persistence", async () => {
+test("a valid custom audio file is saved and shown by filename", async () => {
   const file = new File([new Uint8Array([1, 2, 3])], "alert.ogg", { type: "audio/ogg" })
   vi.spyOn(sound, "validateCustomSound").mockResolvedValue(null)
   const save = vi.spyOn(sound, "saveSoundPreferences").mockResolvedValue(undefined)
@@ -115,6 +115,10 @@ test("a valid custom audio file is passed to browser-local persistence", async (
   fireEvent.change(await screen.findByLabelText("Custom audio file"), { target: { files: [file] } })
   await waitFor(() => expect(save).toHaveBeenCalled())
   expect(save).toHaveBeenCalledWith(expect.objectContaining({ selection: "custom", customAudio: file }))
+  const select = screen.getByRole("combobox", { name: "Approval sound" })
+  expect(select).toHaveTextContent(file.name)
+  await userEvent.click(select)
+  expect(screen.getByRole("option", { name: file.name })).toBeInTheDocument()
   expect(puts).toHaveLength(0)
 })
 

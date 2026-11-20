@@ -121,6 +121,8 @@ function BrowserSoundSettings() {
     store({ ...await getSoundPreferences(), selection: "custom", customAudio: file })
   }
 
+  const customAudioLabel = preferences?.customAudio instanceof File ? preferences.customAudio.name : "Custom audio"
+
   async function requestNotifications() {
     setError(undefined)
     if (typeof Notification === "undefined") { setPermission("unsupported"); return }
@@ -131,9 +133,9 @@ function BrowserSoundSettings() {
   return (
     <div>
       <SettingRow controlId="approval-sound" title="Approval sound" tag="This browser only" description="Played when a mutation waits for you. MP3, WAV or OGG up to 2 MiB for custom audio.">
-        {preferences ? <div className="flex flex-wrap items-center justify-end gap-2"><Select<SoundPreferences["selection"] | "upload"> items={[...BUILT_IN_SOUNDS.map(sound => ({ value: sound.id, label: sound.label })), ...(preferences.customAudio ? [{ value: "custom", label: "Custom audio" }] : []), { value: "upload", label: "Custom audio…" }]} value={preferences.selection} onValueChange={value => { if (value === "upload") document.getElementById("custom-audio")?.click(); else if (value !== null) store({ ...preferences, selection: value }) }}>
-          <SelectTrigger id="approval-sound" aria-describedby="approval-sound-description" aria-label="Approval sound" className="w-36"><SelectValue>{value => value === "custom" ? "Custom audio" : BUILT_IN_SOUNDS.find(sound => sound.id === value)?.label ?? ""}</SelectValue></SelectTrigger>
-          <SelectContent><SelectGroup>{BUILT_IN_SOUNDS.map(sound => <SelectItem key={sound.id} value={sound.id}>{sound.label}</SelectItem>)}{preferences.customAudio && <SelectItem value="custom">Custom audio</SelectItem>}<SelectItem value="upload">Custom audio…</SelectItem></SelectGroup></SelectContent>
+        {preferences ? <div className="flex flex-wrap items-center justify-end gap-2"><Select<SoundPreferences["selection"] | "upload"> items={[...BUILT_IN_SOUNDS.map(sound => ({ value: sound.id, label: sound.label })), ...(preferences.customAudio ? [{ value: "custom", label: customAudioLabel }] : []), { value: "upload", label: "Custom audio…" }]} value={preferences.selection} onValueChange={value => { if (value === "upload") document.getElementById("custom-audio")?.click(); else if (value !== null) store({ ...preferences, selection: value }) }}>
+          <SelectTrigger id="approval-sound" aria-describedby="approval-sound-description" aria-label="Approval sound" className="w-36"><SelectValue>{value => value === "custom" ? <span className="min-w-0 truncate" title={customAudioLabel}>{customAudioLabel}</span> : BUILT_IN_SOUNDS.find(sound => sound.id === value)?.label ?? ""}</SelectValue></SelectTrigger>
+          <SelectContent><SelectGroup>{BUILT_IN_SOUNDS.map(sound => <SelectItem key={sound.id} value={sound.id}>{sound.label}</SelectItem>)}{preferences.customAudio && <SelectItem value="custom">{customAudioLabel}</SelectItem>}<SelectItem value="upload">Custom audio…</SelectItem></SelectGroup></SelectContent>
         </Select><Button type="button" variant="outline" disabled={preferences.muted || preferences.volume === 0} aria-label={`Preview ${BUILT_IN_SOUNDS.find(sound => sound.id === preferences.selection)?.label ?? "custom audio"}`} onClick={() => { void previewApprovalSound() }}><HugeiconsIcon icon={PlayIcon} data-icon="inline-start" />Preview</Button></div> : <span>Loading browser-local sound settings…</span>}
       </SettingRow>
       {preferences && <><div className="sr-only"><Label htmlFor="custom-audio">Custom audio file</Label><Input id="custom-audio" tabIndex={-1} type="file" accept=".mp3,.wav,.ogg,audio/mpeg,audio/mp3,audio/wav,audio/x-wav,audio/ogg,application/ogg" onChange={event => { void chooseFile(event.target.files?.[0]); event.target.value = "" }} /><p>Choose an MP3, WAV, or OGG file no larger than {MAX_CUSTOM_SOUND_BYTES / (1024 * 1024)} MiB.</p></div>
